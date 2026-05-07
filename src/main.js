@@ -10,6 +10,7 @@ const fileDrop = $('#fileDrop');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
+fileDrop.addEventListener('click', openFilePicker);
 fileDrop.addEventListener('keydown', handleFileDropKeydown);
 fileDrop.addEventListener('dragover', handleFileDragOver);
 fileDrop.addEventListener('dragleave', handleFileDragLeave);
@@ -29,8 +30,11 @@ function syncMode() {
 async function handleFile(event) {
   const file = event.target.files?.[0];
   if (!file) return;
-  event.target.value = '';
-  await processSelectedFile(file);
+  try {
+    await processSelectedFile(file);
+  } finally {
+    event.target.value = '';
+  }
 }
 
 function openFilePicker() {
@@ -65,6 +69,7 @@ async function handleFileDrop(event) {
 }
 
 async function processSelectedFile(file) {
+  resetSelectedFileState();
   $('#fileName').textContent = file.name;
   $('#download').classList.add('disabled');
   if (state.downloadUrl) {
@@ -73,19 +78,31 @@ async function processSelectedFile(file) {
     state.downloadBlob = null;
   }
 
+  if (!isSupportedActivityFile(file)) {
+    setStatus('FITまたはCSVファイルを選択してください。', true);
+    return;
+  }
+
   const fileType = getFileType(file);
   setStatus(`${fileType.label}ファイルを読み込み中…`);
   try {
     state.sourceData = await parseActivityFile(file, fileType);
     state.metrics = extractMetrics(state.sourceData, fileType.label);
+    fileDrop.classList.add('has-file');
     setStatus(`${state.metrics.records.length.toLocaleString()}点の記録を読み込みました。画像を作成できます。`);
     $('#summary').textContent = `${formatDuration(state.metrics.duration)} / ${Math.round(state.metrics.avgPower)}W avg`;
   } catch (error) {
-    state.sourceData = null;
-    state.metrics = null;
-    $('#summary').textContent = '';
+    resetSelectedFileState(false);
     setStatus(`${fileType.label}ファイルを読み込めませんでした: ${formatError(error)}`, true);
   }
+}
+
+function resetSelectedFileState(resetFileName = true) {
+  state.sourceData = null;
+  state.metrics = null;
+  $('#summary').textContent = '';
+  fileDrop.classList.remove('has-file');
+  if (resetFileName) $('#fileName').textContent = '未選択';
 }
 
 
