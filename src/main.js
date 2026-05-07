@@ -21,6 +21,7 @@ $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
 fileDrop.addEventListener('dragover', handleFileDragOver);
 fileDrop.addEventListener('dragleave', handleFileDragLeave);
 fileDrop.addEventListener('drop', handleFileDrop);
+fileInput.addEventListener('click', prepareFilePicker);
 fileInput.addEventListener('change', handleFile);
 $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
@@ -33,14 +34,16 @@ function syncMode() {
   drawPlaceholder();
 }
 
+function prepareFilePicker(event) {
+  // Clear before opening the picker so choosing the same file again still fires
+  // a change event, while keeping the selected file visible after selection.
+  event.currentTarget.value = '';
+}
+
 async function handleFile(event) {
-  const file = event.target.files?.[0];
+  const file = event.currentTarget.files?.[0];
   if (!file) return;
-  try {
-    await processSelectedFile(file);
-  } finally {
-    event.target.value = '';
-  }
+  await processSelectedFile(file);
 }
 
 
