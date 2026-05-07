@@ -9,6 +9,7 @@ const state = {
   downloadBlob: null,
   downloadFileName: 'zwift-result.png',
   fileSelectionToken: 0,
+  fileInputKey: null,
   isLoadingFile: false,
 };
 const DEFAULT_CANVAS_WIDTH = 1920;
@@ -17,13 +18,16 @@ const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = $('#fitFile');
 const fileDrop = $('#fileDrop');
+const fileSelectButton = $('#fileSelectButton');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
+fileDrop.addEventListener('click', handleFileDropClick);
 fileDrop.addEventListener('dragover', handleFileDragOver);
 fileDrop.addEventListener('dragleave', handleFileDragLeave);
 fileDrop.addEventListener('drop', handleFileDrop);
-fileInput.addEventListener('click', prepareFilePicker);
+fileSelectButton.addEventListener('click', openFilePicker);
+fileInput.addEventListener('input', handleFile);
 fileInput.addEventListener('change', handleFile);
 $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
@@ -36,18 +40,34 @@ function syncMode() {
   drawPlaceholder();
 }
 
-function prepareFilePicker(event) {
+function handleFileDropClick(event) {
+  if (event.target === fileInput || event.target === fileSelectButton) return;
+  openFilePicker();
+}
+
+function openFilePicker() {
   // Clear before opening the picker so choosing the same file again still fires
-  // a change event, while keeping the selected file visible after selection.
-  event.currentTarget.value = '';
+  // a change/input event, while keeping the selected file visible after selection.
+  state.fileInputKey = null;
+  fileInput.value = '';
+  fileInput.click();
 }
 
 async function handleFile(event) {
   const file = event.currentTarget.files?.[0];
   if (!file) return;
+
+  const fileInputKey = getFileInputKey(file);
+  if (fileInputKey === state.fileInputKey) return;
+  state.fileInputKey = fileInputKey;
+
   await processSelectedFile(file);
 }
 
+
+function getFileInputKey(file) {
+  return [file.name, file.size, file.lastModified, file.type].join(':');
+}
 
 function handleFileDragOver(event) {
   event.preventDefault();
