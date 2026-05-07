@@ -10,7 +10,6 @@ const fileDrop = $('#fileDrop');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
-fileDrop.addEventListener('click', openFilePicker);
 fileDrop.addEventListener('keydown', handleFileDropKeydown);
 fileDrop.addEventListener('dragover', handleFileDragOver);
 fileDrop.addEventListener('dragleave', handleFileDragLeave);
@@ -38,6 +37,14 @@ async function handleFile(event) {
 }
 
 function openFilePicker() {
+  if (typeof fileInput.showPicker === 'function') {
+    try {
+      fileInput.showPicker();
+      return;
+    } catch {
+      // Some mobile browsers expose showPicker but still reject it for hidden inputs.
+    }
+  }
   fileInput.click();
 }
 
@@ -118,8 +125,28 @@ function isSupportedActivityFile(file) {
 }
 
 async function parseActivityFile(file, fileType) {
-  if (fileType.type === 'csv') return parseCsvText(await file.text());
-  return parseFitBuffer(await file.arrayBuffer());
+  if (fileType.type === 'csv') return parseCsvText(await readFileAsText(file));
+  return parseFitBuffer(await readFileAsArrayBuffer(file));
+}
+
+function readFileAsText(file) {
+  if (typeof file.text === 'function') return file.text();
+  return readFileWithFileReader(file, 'readAsText');
+}
+
+function readFileAsArrayBuffer(file) {
+  if (typeof file.arrayBuffer === 'function') return file.arrayBuffer();
+  return readFileWithFileReader(file, 'readAsArrayBuffer');
+}
+
+function readFileWithFileReader(file, method) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => resolve(reader.result));
+    reader.addEventListener('error', () => reject(reader.error || new Error('ファイルの読み込みに失敗しました。')));
+    reader.addEventListener('abort', () => reject(new Error('ファイルの読み込みがキャンセルされました。')));
+    reader[method](file);
+  });
 }
 
 function parseFitBuffer(buffer) {
