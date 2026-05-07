@@ -2,7 +2,7 @@ import FitParser from 'fit-file-parser';
 
 const $ = (selector) => document.querySelector(selector);
 
-const state = { sourceData: null, metrics: null, downloadUrl: null };
+const state = { sourceData: null, metrics: null, downloadUrl: null, downloadBlob: null, downloadFileName: 'zwift-result.png' };
 const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = $('#fitFile');
@@ -17,6 +17,7 @@ fileDrop.addEventListener('drop', handleFileDrop);
 fileInput.addEventListener('click', resetFileInput);
 fileInput.addEventListener('change', handleFile);
 $('#generate').addEventListener('click', generateImage);
+$('#download').addEventListener('click', savePng);
 
 function syncMode() {
   const mode = getMode();
@@ -74,6 +75,7 @@ async function processSelectedFile(file) {
   if (state.downloadUrl) {
     URL.revokeObjectURL(state.downloadUrl);
     state.downloadUrl = null;
+    state.downloadBlob = null;
   }
 
   const fileType = getFileType(file);
@@ -325,12 +327,47 @@ function generateImage() {
   canvas.toBlob((blob) => {
     if (!blob) return;
     if (state.downloadUrl) URL.revokeObjectURL(state.downloadUrl);
+    state.downloadBlob = blob;
     state.downloadUrl = URL.createObjectURL(blob);
     const download = $('#download');
     download.href = state.downloadUrl;
+    download.download = state.downloadFileName;
     download.classList.remove('disabled');
-  });
-  setStatus('画像を作成しました。PNGを保存できます。');
+  }, 'image/png');
+  const saveMessage = isSmartphoneDevice()
+    ? '画像を作成しました。「PNGを保存」から端末に保存できます。'
+    : '画像を作成しました。PNGを保存できます。';
+  setStatus(saveMessage);
+}
+
+async function savePng(event) {
+  const download = $('#download');
+  if (download.classList.contains('disabled') || !state.downloadBlob) {
+    event.preventDefault();
+    return;
+  }
+
+  if (!isSmartphoneDevice()) return;
+
+  const file = new File([state.downloadBlob], state.downloadFileName, { type: 'image/png' });
+  if (!navigator.canShare?.({ files: [file] }) || !navigator.share) return;
+
+  event.preventDefault();
+  try {
+    await navigator.share({ files: [file], title: 'Zwiftリザルト画像' });
+    setStatus('共有メニューから端末にPNGを保存できます。');
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      setStatus('PNGの保存をキャンセルしました。');
+      return;
+    }
+    setStatus(`PNGの保存を開始できませんでした: ${formatError(error)}`, true);
+  }
+}
+
+function isSmartphoneDevice() {
+  return /Android|iPhone|iPod|Windows Phone/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 1 && matchMedia('(max-width: 767px)').matches);
 }
 
 function setStatus(message, isError = false) {
