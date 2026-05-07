@@ -10,6 +10,7 @@ const fileDrop = $('#fileDrop');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
+fileDrop.addEventListener('click', handleFileDropClick);
 fileDrop.addEventListener('keydown', handleFileDropKeydown);
 fileDrop.addEventListener('dragover', handleFileDragOver);
 fileDrop.addEventListener('dragleave', handleFileDragLeave);
@@ -46,6 +47,12 @@ function openFilePicker() {
     }
   }
   fileInput.click();
+}
+
+function handleFileDropClick(event) {
+  if (event.target === fileInput) return;
+  event.preventDefault();
+  openFilePicker();
 }
 
 function handleFileDropKeydown(event) {
