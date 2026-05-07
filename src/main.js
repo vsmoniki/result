@@ -10,7 +10,6 @@ const fileDrop = $('#fileDrop');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
-fileDrop.addEventListener('click', openFilePicker);
 fileDrop.addEventListener('keydown', handleFileDropKeydown);
 fileDrop.addEventListener('dragover', handleFileDragOver);
 fileDrop.addEventListener('dragleave', handleFileDragLeave);
@@ -34,6 +33,7 @@ async function handleFile(event) {
 }
 
 function openFilePicker() {
+  fileInput.value = '';
   fileInput.click();
 }
 
