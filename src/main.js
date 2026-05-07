@@ -10,8 +10,6 @@ const fileDrop = $('#fileDrop');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
-fileDrop.addEventListener('click', handleFileDropClick);
-fileDrop.addEventListener('keydown', handleFileDropKeydown);
 fileDrop.addEventListener('dragover', handleFileDragOver);
 fileDrop.addEventListener('dragleave', handleFileDragLeave);
 fileDrop.addEventListener('drop', handleFileDrop);
@@ -37,29 +35,6 @@ async function handleFile(event) {
   }
 }
 
-function openFilePicker() {
-  if (typeof fileInput.showPicker === 'function') {
-    try {
-      fileInput.showPicker();
-      return;
-    } catch {
-      // Some mobile browsers expose showPicker but still reject it for hidden inputs.
-    }
-  }
-  fileInput.click();
-}
-
-function handleFileDropClick(event) {
-  if (event.target === fileInput) return;
-  event.preventDefault();
-  openFilePicker();
-}
-
-function handleFileDropKeydown(event) {
-  if (event.key !== 'Enter' && event.key !== ' ') return;
-  event.preventDefault();
-  openFilePicker();
-}
 
 function handleFileDragOver(event) {
   event.preventDefault();

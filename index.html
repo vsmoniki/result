@@ -16,7 +16,7 @@
         </section>
 
         <section class="panel controls">
-          <div id="fileDrop" class="file-drop" role="button" tabindex="0" aria-controls="fitFile" aria-describedby="status">
+          <label id="fileDrop" class="file-drop" aria-describedby="status">
             <span>FITまたはCSVファイルを選択</span>
             <strong id="fileName">未選択</strong>
             <small>スマホでは「ファイル」アプリから選択できます。PCではここへドロップもできます。</small>
@@ -27,7 +27,7 @@
               type="file"
               accept=".fit,.FIT,.csv,.CSV,text/csv,application/csv,application/vnd.ant.fit,application/octet-stream"
             />
-          </div>
+          </label>
 
           <div class="mode-grid" role="tablist" aria-label="作成する画像タイプ">
             <label><input type="radio" name="mode" value="finish" checked /> 完走タイム</label>
