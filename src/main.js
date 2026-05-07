@@ -172,7 +172,8 @@ function parseWithCallback(parser, buffer) {
 
 
 function parseCsvText(text) {
-  const rows = parseCsvRows(text).filter((row) => row.some((cell) => cell.trim() !== ''));
+  const delimiter = detectCsvDelimiter(text);
+  const rows = parseCsvRows(text, delimiter).filter((row) => row.some((cell) => cell.trim() !== ''));
   if (rows.length < 2) throw new Error('CSVにヘッダー行とデータ行が必要です。');
 
   const headers = rows[0].map(normalizeHeader);
@@ -187,10 +188,19 @@ function parseCsvText(text) {
   return {
     records,
     sessions: Number.isFinite(calories) ? [{ total_calories: calories }] : [],
+    sampleIntervalSeconds: 1,
   };
 }
 
-function parseCsvRows(text) {
+function detectCsvDelimiter(text) {
+  const firstLine = text.split(/\r?\n/, 1)[0] || '';
+  const delimiters = [',', ';', '\t'];
+  return delimiters
+    .map((delimiter) => ({ delimiter, count: firstLine.split(delimiter).length - 1 }))
+    .sort((a, b) => b.count - a.count)[0]?.delimiter || ',';
+}
+
+function parseCsvRows(text, delimiter = ',') {
   const rows = [];
   let row = [];
   let cell = '';
@@ -206,7 +216,7 @@ function parseCsvRows(text) {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       row.push(cell);
       cell = '';
     } else if ((char === '\n' || char === '\r') && !inQuotes) {
@@ -226,25 +236,30 @@ function parseCsvRows(text) {
 }
 
 function csvRowToRecord(headers, row, index) {
-  const timestampInfo = findHeader(headers, [
-    ['timestamp'], ['time'], ['datetime'], ['date'], ['starttime'], ['recordedat'], ['localtime'], ['時間'], ['日時'], ['時刻'],
-  ]);
   const elapsedInfo = findHeader(headers, [
-    ['elapsedtime'], ['elapsed'], ['duration'], ['seconds'], ['sec'], ['timeoffset'], ['経過時間'], ['経過秒'],
+    ['elapsedtime'], ['elapsed'], ['duration'], ['seconds'], ['second'], ['secs'], ['sec'], ['timeoffset'], ['経過時間'], ['経過秒'], ['秒'],
   ]);
+  const timestampInfo = findHeader(headers, [
+    ['timestamp'], ['datetime'], ['date'], ['starttime'], ['recordedat'], ['localtime'], ['日時'],
+  ]);
+  const timeInfo = findHeader(headers, [
+    ['time'], ['timer'], ['lap time'], ['時間'], ['時刻'],
+  ]);
+  const timeColumn = timeInfo?.index === timestampInfo?.index ? undefined : timeInfo;
 
-  const elapsed = elapsedInfo ? parseDuration(row[elapsedInfo.index]) : undefined;
-  const timestamp = timestampInfo ? parseTimestamp(row[timestampInfo.index], elapsed, index) : undefined;
-  const fallbackTimestamp = Number.isFinite(elapsed) ? new Date(elapsed * 1000) : new Date(index * 1000);
+  const elapsedFromElapsedColumn = elapsedInfo ? parseDuration(row[elapsedInfo.index]) : undefined;
+  const elapsedFromTimeColumn = timeColumn ? parseDuration(row[timeColumn.index]) : undefined;
+  const timestamp = timestampInfo ? parseTimestamp(row[timestampInfo.index], elapsedFromElapsedColumn, index) : undefined;
+  const elapsed = firstFinite(elapsedFromElapsedColumn, elapsedFromTimeColumn, index);
 
   const distance = readCsvMetric(headers, row, [['distance'], ['dist'], ['km'], ['距離']]);
   const speed = readCsvMetric(headers, row, [['speed'], ['velocity'], ['kph'], ['kmh'], ['km/h'], ['速度']]);
 
   return {
-    timestamp: timestamp || fallbackTimestamp,
-    elapsed: Number.isFinite(elapsed) ? elapsed : undefined,
+    timestamp: timestamp || new Date(elapsed * 1000),
+    elapsed,
     power: readCsvNumber(headers, row, [['power'], ['watts'], ['watt'], ['w'], ['パワー'], ['ワット']]),
-    heart_rate: readCsvNumber(headers, row, [['heartrate'], ['heart rate'], ['hr'], ['bpm'], ['心拍'], ['心拍数']]),
+    heart_rate: readCsvNumber(headers, row, [['heartrate'], ['heart rate'], ['hr'], ['bpm'], ['heart'], ['pulse'], ['心拍'], ['心拍数']]),
     cadence: readCsvNumber(headers, row, [['cadence'], ['rpm'], ['ケイデンス']]),
     distance: normalizeDistance(distance),
     speed: normalizeSpeed(speed),
@@ -298,7 +313,12 @@ function parseDuration(value) {
 
 function parseTimestamp(value, elapsed, index) {
   if (value == null || String(value).trim() === '') return undefined;
-  const date = new Date(value);
+  const normalized = String(value).trim();
+  if (/^-?\d+(?:\.\d+)?$/.test(normalized)) {
+    if (Number.isFinite(elapsed)) return new Date(elapsed * 1000);
+    return new Date(index * 1000);
+  }
+  const date = new Date(normalized);
   if (!Number.isNaN(date.getTime())) return date;
   if (Number.isFinite(elapsed)) return new Date(elapsed * 1000);
   const duration = parseDuration(value);
@@ -317,6 +337,10 @@ function normalizeSpeed(metric) {
 
 function lastFinite(values) {
   return [...values].reverse().find(Number.isFinite);
+}
+
+function firstFinite(...values) {
+  return values.find(Number.isFinite);
 }
 
 function formatError(error) {
@@ -424,7 +448,11 @@ function extractMetrics(data, sourceLabel = 'FIT') {
 
   const powers = records.map((r) => r.power).filter(Number.isFinite);
   const heartRates = records.map((r) => r.heartRate).filter(Number.isFinite);
-  const duration = Math.max(...records.map((r) => r.elapsed));
+  const maxElapsed = Math.max(...records.map((r) => r.elapsed));
+  const minElapsed = Math.min(...records.map((r) => r.elapsed));
+  const duration = data.sampleIntervalSeconds && minElapsed <= data.sampleIntervalSeconds
+    ? maxElapsed + data.sampleIntervalSeconds
+    : maxElapsed;
   const lastDistance = [...records].reverse().find((r) => Number.isFinite(r.distance))?.distance ?? 0;
   const avgPower = average(powers);
   const maxPower = powers.length ? Math.max(...powers) : 0;
