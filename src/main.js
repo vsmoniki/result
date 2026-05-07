@@ -1,5 +1,3 @@
-import './styles.css';
-
 const $ = (selector) => document.querySelector(selector);
 
 const state = { fitData: null, metrics: null, downloadUrl: null };
