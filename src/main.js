@@ -10,17 +10,18 @@ const state = {
   downloadFileName: 'zwift-result.png',
   fileSelectionToken: 0,
   fileInputKey: null,
+  autoRideTitle: '',
   isLoadingFile: false,
 };
 
-// Guard against ghost clicks that some browsers (e.g. iOS Safari) fire on the
-// label after the native file picker closes, which would clear fileInput.value
-// before the change event fires and make handleFile see no file.
+// Guard against duplicate activations while the native file picker is open.
 let pickerIsActive = false;
 let pickerActivatedAt = 0;
 const PICKER_TIMEOUT_MS = 30_000;
 const DEFAULT_CANVAS_WIDTH = 1920;
 const DEFAULT_CANVAS_HEIGHT = 1080;
+const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
+const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = $('#fitFile');
@@ -28,19 +29,25 @@ const fileDrop = $('#fileDrop');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
-fileDrop.addEventListener('click', prepareFilePicker);
 fileDrop.addEventListener('dragover', handleFileDragOver);
 fileDrop.addEventListener('dragleave', handleFileDragLeave);
 fileDrop.addEventListener('drop', handleFileDrop);
+fileDrop.addEventListener('pointerenter', handlePendingFileSelection);
 fileInput.addEventListener('click', prepareFilePicker);
+fileInput.addEventListener('blur', handlePendingFileSelection);
 fileInput.addEventListener('cancel', onPickerClose);
 fileInput.addEventListener('input', handleFile);
 fileInput.addEventListener('change', handleFile);
 window.addEventListener('focus', () => {
-  if (pickerIsActive) setTimeout(onPickerClose, 500);
+  if (!pickerIsActive) return;
+  setTimeout(() => {
+    onPickerClose();
+    handlePendingFileSelection();
+  }, 500);
 });
 $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
+$('#rideTitle').addEventListener('input', handleRideTitleInput);
 
 function syncMode() {
   const mode = getMode();
@@ -53,18 +60,9 @@ function syncMode() {
 function prepareFilePicker(event) {
   const now = Date.now();
   // If the picker is already active (opened by an earlier genuine click), ignore
-  // this event — it may be a ghost click that iOS Safari fires on the label after
-  // the native picker closes, which would otherwise clear fileInput.value before
-  // the change event fires.  The 30-second timeout is a safety valve so a
-  // cancelled picker (no cancel/change event) doesn't block future opens.
+  // duplicate events. The 30-second timeout is a safety valve so a cancelled
+  // picker (no cancel/change event) doesn't block future opens.
   if (pickerIsActive && now - pickerActivatedAt < PICKER_TIMEOUT_MS) {
-    // Suppress label activation for clicks that originated on the label itself
-    // (ghost clicks). Don't suppress clicks that bubbled up FROM fileInput,
-    // because those are the browser's own synthetic activation click that
-    // actually opens the picker for legitimate user interactions.
-    if (event.currentTarget === fileDrop && event.target !== fileInput) {
-      event.preventDefault();
-    }
     return;
   }
   state.fileInputKey = null;
@@ -78,8 +76,17 @@ function onPickerClose() {
 }
 
 async function handleFile(event) {
-  const file = event.currentTarget.files?.[0];
+  await processFileInputSelection(event.currentTarget);
+}
+
+async function handlePendingFileSelection() {
+  await processFileInputSelection(fileInput);
+}
+
+async function processFileInputSelection(input) {
+  const file = input.files?.[0];
   if (!file) return;
+  onPickerClose();
 
   const fileInputKey = getFileInputKey(file);
   if (fileInputKey === state.fileInputKey) return;
@@ -108,7 +115,7 @@ async function handleFileDrop(event) {
   fileDrop.classList.remove('drag-over');
   const file = [...(event.dataTransfer?.files || [])].find(isSupportedActivityFile);
   if (!file) {
-    setStatus('FITまたはCSVファイルをドロップしてください。', true);
+    setStatus('FITファイルをドロップしてください。', true);
     return;
   }
   await processSelectedFile(file);
@@ -119,33 +126,33 @@ async function processSelectedFile(file) {
 
   if (!isSupportedActivityFile(file)) {
     finishFileSelection(selectionToken);
-    setStatus('FITまたはCSVファイルを選択してください。', true);
+    setStatus('FITファイルを選択してください。', true);
     return;
   }
 
-  const fileType = getFileType(file);
-  setStatus(`${fileType.label}ファイルを読み込み中…`);
+  setStatus('FITファイルを読み込み中…');
   try {
-    const sourceData = await parseActivityFile(file, fileType);
-    const metrics = extractMetrics(sourceData, fileType.label);
+    const sourceData = await parseActivityFile(file);
+    const metrics = extractMetrics(sourceData);
     if (!isCurrentFileSelection(selectionToken)) return;
 
     state.sourceData = sourceData;
     state.metrics = metrics;
     state.isLoadingFile = false;
+    syncRideTitle(sourceData, file);
     $('#generate').disabled = false;
     fileDrop.classList.add('has-file');
     $('#summary').textContent = `${formatDuration(metrics.duration)} / ${Math.round(metrics.avgPower)}W avg`;
     if (canGenerateImage()) {
       generateImage();
-      setStatus(`${metrics.records.length.toLocaleString()}点の記録を読み込み、プレビューへ反映しました。`);
+      setStatus('プレビューへ反映しました。');
     } else {
-      setStatus(`${metrics.records.length.toLocaleString()}点の記録を読み込みました。必要項目を入力して画像を作成してください。`);
+      setStatus('必要項目を入力して画像を作成してください。');
     }
   } catch (error) {
     if (!isCurrentFileSelection(selectionToken)) return;
     resetSelectedFileState(false);
-    setStatus(`${fileType.label}ファイルを読み込めませんでした: ${formatError(error)}`, true);
+    setStatus(`FITファイルを読み込めませんでした: ${formatError(error)}`, true);
   } finally {
     finishFileSelection(selectionToken);
   }
@@ -181,6 +188,97 @@ function resetSelectedFileState(resetFileName = true) {
   if (resetFileName) $('#fileName').textContent = '未選択';
 }
 
+function handleRideTitleInput(event) {
+  if (event.currentTarget.value !== state.autoRideTitle) {
+    state.autoRideTitle = '';
+  }
+}
+
+function syncRideTitle(data, file) {
+  const titleInput = $('#rideTitle');
+  const currentTitle = titleInput.value.trim();
+  if (currentTitle && currentTitle !== state.autoRideTitle) return;
+
+  const title = extractRideTitle(data) || titleFromFileName(file.name);
+  if (!title) return;
+
+  titleInput.value = title;
+  state.autoRideTitle = title;
+}
+
+function extractRideTitle(data) {
+  const preferredValues = [
+    data.activity?.name,
+    data.activity?.title,
+    data.activity?.sport_profile_name,
+    data.sessions?.[0]?.name,
+    data.sessions?.[0]?.title,
+    data.sessions?.[0]?.sport_profile_name,
+    data.sports?.[0]?.name,
+    data.sports?.[0]?.sport_profile_name,
+    data.workout?.name,
+    data.workout?.wkt_name,
+    data.course?.name,
+  ];
+  return preferredValues.map(cleanRideTitle).find(Boolean)
+    || findNestedRideTitle({
+      activity: data.activity,
+      sessions: data.sessions,
+      sports: data.sports,
+      workout: data.workout,
+      course: data.course,
+    });
+}
+
+function findNestedRideTitle(value, depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 4) return '';
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const title = findNestedRideTitle(item, depth + 1);
+      if (title) return title;
+    }
+    return '';
+  }
+
+  for (const [key, item] of Object.entries(value)) {
+    if (isRideTitleKey(key)) {
+      const title = cleanRideTitle(item);
+      if (title) return title;
+    }
+  }
+
+  for (const item of Object.values(value)) {
+    const title = findNestedRideTitle(item, depth + 1);
+    if (title) return title;
+  }
+  return '';
+}
+
+function isRideTitleKey(key) {
+  const normalized = key.toLowerCase().replace(/[\s_()-]/g, '');
+  return [
+    'title',
+    'name',
+    'activityname',
+    'workoutname',
+    'sportprofilename',
+    'coursename',
+    'eventname',
+  ].includes(normalized);
+}
+
+function cleanRideTitle(value) {
+  if (typeof value !== 'string') return '';
+  const title = value.trim();
+  if (!title || title.length > 80) return '';
+  if (/^(cycling|running|fitness_equipment|training|generic|road)$/i.test(title)) return '';
+  return title;
+}
+
+function titleFromFileName(fileName) {
+  return fileName.replace(/\.[^.]+$/, '').trim();
+}
+
 function clearGeneratedDownload() {
   const download = $('#download');
   download.classList.add('disabled');
@@ -193,25 +291,13 @@ function clearGeneratedDownload() {
 }
 
 
-function getFileType(file) {
-  const name = file.name.toLowerCase();
-  if (name.endsWith('.csv') || /(?:^|\/)csv$|text\/plain/.test(file.type)) return { label: 'CSV', type: 'csv' };
-  return { label: 'FIT', type: 'fit' };
-}
-
 function isSupportedActivityFile(file) {
   const name = file.name.toLowerCase();
-  return name.endsWith('.fit') || name.endsWith('.csv') || ['text/csv', 'application/csv', 'application/vnd.ant.fit', 'application/octet-stream'].includes(file.type);
+  return name.endsWith('.fit') || ['application/vnd.ant.fit', 'application/octet-stream'].includes(file.type);
 }
 
-async function parseActivityFile(file, fileType) {
-  if (fileType.type === 'csv') return parseCsvText(await readFileAsText(file));
+async function parseActivityFile(file) {
   return parseFitBuffer(await readFileAsArrayBuffer(file));
-}
-
-function readFileAsText(file) {
-  if (typeof file.text === 'function') return file.text();
-  return readFileWithFileReader(file, 'readAsText');
 }
 
 function readFileAsArrayBuffer(file) {
@@ -270,179 +356,6 @@ function parseWithCallback(parser, buffer) {
   });
 }
 
-
-function parseCsvText(text) {
-  const delimiter = detectCsvDelimiter(text);
-  const rows = parseCsvRows(text, delimiter).filter((row) => row.some((cell) => cell.trim() !== ''));
-  if (rows.length < 2) throw new Error('CSVにヘッダー行とデータ行が必要です。');
-
-  const headers = rows[0].map(normalizeHeader);
-  const records = rows.slice(1).map((row, index) => csvRowToRecord(headers, row, index)).filter(Boolean);
-  if (!records.length) throw new Error('CSVに読み取り可能な時系列レコードがありません。');
-
-  const caloriesHeader = findHeader(headers, [['calories'], ['kcal'], ['calorie']]);
-  const calories = caloriesHeader
-    ? lastFinite(rows.slice(1).map((row) => parseNumber(row[caloriesHeader.index])))
-    : undefined;
-
-  return {
-    records,
-    sessions: Number.isFinite(calories) ? [{ total_calories: calories }] : [],
-    sampleIntervalSeconds: 1,
-  };
-}
-
-function detectCsvDelimiter(text) {
-  const firstLine = text.split(/\r?\n/, 1)[0] || '';
-  const delimiters = [',', ';', '\t'];
-  return delimiters
-    .map((delimiter) => ({ delimiter, count: firstLine.split(delimiter).length - 1 }))
-    .sort((a, b) => b.count - a.count)[0]?.delimiter || ',';
-}
-
-function parseCsvRows(text, delimiter = ',') {
-  const rows = [];
-  let row = [];
-  let cell = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i];
-    const next = text[i + 1];
-    if (char === '"') {
-      if (inQuotes && next === '"') {
-        cell += '"';
-        i += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === delimiter && !inQuotes) {
-      row.push(cell);
-      cell = '';
-    } else if ((char === '\n' || char === '\r') && !inQuotes) {
-      if (char === '\r' && next === '\n') i += 1;
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = '';
-    } else {
-      cell += char;
-    }
-  }
-
-  row.push(cell);
-  rows.push(row);
-  return rows;
-}
-
-function csvRowToRecord(headers, row, index) {
-  const elapsedInfo = findHeader(headers, [
-    ['elapsedtime'], ['elapsed'], ['duration'], ['seconds'], ['second'], ['secs'], ['sec'], ['timeoffset'], ['経過時間'], ['経過秒'], ['秒'],
-  ]);
-  const timestampInfo = findHeader(headers, [
-    ['timestamp'], ['datetime'], ['date'], ['starttime'], ['recordedat'], ['localtime'], ['日時'],
-  ]);
-  const timeInfo = findHeader(headers, [
-    ['time'], ['timer'], ['lap time'], ['時間'], ['時刻'],
-  ]);
-  const timeColumn = timeInfo?.index === timestampInfo?.index ? undefined : timeInfo;
-
-  const elapsedFromElapsedColumn = elapsedInfo ? parseDuration(row[elapsedInfo.index]) : undefined;
-  const elapsedFromTimeColumn = timeColumn ? parseDuration(row[timeColumn.index]) : undefined;
-  const timestamp = timestampInfo ? parseTimestamp(row[timestampInfo.index], elapsedFromElapsedColumn, index) : undefined;
-  const elapsed = firstFinite(elapsedFromElapsedColumn, elapsedFromTimeColumn, index);
-
-  const distance = readCsvMetric(headers, row, [['distance'], ['dist'], ['km'], ['距離']]);
-  const speed = readCsvMetric(headers, row, [['speed'], ['velocity'], ['kph'], ['kmh'], ['km/h'], ['速度']]);
-
-  return {
-    timestamp: timestamp || new Date(elapsed * 1000),
-    elapsed,
-    power: readCsvNumber(headers, row, [['power'], ['watts'], ['watt'], ['w'], ['パワー'], ['ワット']]),
-    heart_rate: readCsvNumber(headers, row, [['heartrate'], ['heart rate'], ['hr'], ['bpm'], ['heart'], ['pulse'], ['心拍'], ['心拍数']]),
-    cadence: readCsvNumber(headers, row, [['cadence'], ['rpm'], ['ケイデンス']]),
-    distance: normalizeDistance(distance),
-    speed: normalizeSpeed(speed),
-  };
-}
-
-function normalizeHeader(header) {
-  return header.trim().toLowerCase().replace(/^\ufeff/, '').replace(/[\s_()\[\]{}.-]/g, '');
-}
-
-function findHeader(headers, candidates) {
-  const normalizedCandidates = candidates.map((candidate) => candidate.map(normalizeHeader));
-  for (const candidate of normalizedCandidates) {
-    const index = headers.findIndex((header) => candidate.some((term) => header === term || header.includes(term)));
-    if (index !== -1) return { index, header: headers[index] };
-  }
-  return undefined;
-}
-
-function readCsvNumber(headers, row, candidates) {
-  return readCsvMetric(headers, row, candidates)?.value;
-}
-
-function readCsvMetric(headers, row, candidates) {
-  const header = findHeader(headers, candidates);
-  if (!header) return undefined;
-  return { header: header.header, value: parseNumber(row[header.index]) };
-}
-
-function parseNumber(value) {
-  if (value == null) return undefined;
-  const normalized = String(value).trim().replace(/,/g, '');
-  if (!normalized) return undefined;
-  const match = normalized.match(/-?\d+(?:\.\d+)?/);
-  if (!match) return undefined;
-  const number = Number(match[0]);
-  return Number.isFinite(number) ? number : undefined;
-}
-
-function parseDuration(value) {
-  if (value == null) return undefined;
-  const normalized = String(value).trim();
-  if (!normalized) return undefined;
-  const timeParts = normalized.match(/^(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:\.\d+)?$/);
-  if (timeParts) {
-    const [, hours = '0', minutes, seconds] = timeParts;
-    return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
-  }
-  return parseNumber(normalized);
-}
-
-function parseTimestamp(value, elapsed, index) {
-  if (value == null || String(value).trim() === '') return undefined;
-  const normalized = String(value).trim();
-  if (/^-?\d+(?:\.\d+)?$/.test(normalized)) {
-    if (Number.isFinite(elapsed)) return new Date(elapsed * 1000);
-    return new Date(index * 1000);
-  }
-  const date = new Date(normalized);
-  if (!Number.isNaN(date.getTime())) return date;
-  if (Number.isFinite(elapsed)) return new Date(elapsed * 1000);
-  const duration = parseDuration(value);
-  return Number.isFinite(duration) ? new Date(duration * 1000) : new Date(index * 1000);
-}
-
-function normalizeDistance(metric) {
-  if (!Number.isFinite(metric?.value)) return undefined;
-  return /(?:^|[^k])m$|meter|metre/.test(metric.header) ? metric.value / 1000 : metric.value;
-}
-
-function normalizeSpeed(metric) {
-  if (!Number.isFinite(metric?.value)) return undefined;
-  return /m\/s|meterpersecond|metrepersecond/.test(metric.header) ? metric.value * 3.6 : metric.value;
-}
-
-function lastFinite(values) {
-  return [...values].reverse().find(Number.isFinite);
-}
-
-function firstFinite(...values) {
-  return values.find(Number.isFinite);
-}
-
 function formatError(error) {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
@@ -459,7 +372,8 @@ function generateImage() {
     return;
   }
   if (!state.metrics) {
-    setStatus('先にFITまたはCSVファイルを選択してください。', true);
+    handlePendingFileSelection();
+    setStatus('先にFITファイルを選択してください。', true);
     return;
   }
   if (getMode() === 'finish') {
@@ -648,6 +562,10 @@ function average(values) {
   return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : 0;
 }
 
+function reportFont(size, weight = 900, family = REPORT_FONT) {
+  return `${weight} ${size}px ${family}`;
+}
+
 function drawPlaceholder() {
   canvas.width = DEFAULT_CANVAS_WIDTH;
   canvas.height = DEFAULT_CANVAS_HEIGHT;
@@ -662,7 +580,7 @@ function drawPlaceholder() {
   ctx.fillStyle = 'rgba(255,255,255,.92)';
   ctx.font = '800 72px system-ui, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('FIT/CSVファイルを選択して画像を作成', w / 2, h / 2);
+  ctx.fillText('FITファイルを選択して画像を作成', w / 2, h / 2);
 }
 
 function drawFinishResult(metrics, weight) {
@@ -707,7 +625,7 @@ function drawRideReport(metrics, options) {
   ctx.fillStyle = '#2d2d2d';
   ctx.fillRect(0, 0, 1000, 41);
   ctx.fillStyle = '#fff';
-  ctx.font = '900 36px system-ui, sans-serif';
+  ctx.font = reportFont(37);
   ctx.textAlign = 'center';
   ctx.fillText('ライドレポート', 500, 34);
 
@@ -721,15 +639,15 @@ function drawRideReport(metrics, options) {
 function drawHeader(metrics, { title }) {
   ctx.fillStyle = '#27272b';
   ctx.textAlign = 'left';
-  ctx.font = '900 27px system-ui, sans-serif';
+  ctx.font = reportFont(27, 950, REPORT_NUMBER_FONT);
   ctx.fillText(title, 27, 72);
 
   const stats = [
-    { icon: '⚡', value: Math.round(metrics.avgPower), unit: 'AVG', x: 37, maxWidth: 178 },
-    { icon: '〽', value: metrics.distanceKm.toFixed(1), unit: 'km', x: 240, maxWidth: 155 },
-    { icon: '◷', value: formatDuration(metrics.duration), unit: 'ET', x: 414, maxWidth: 175 },
-    { icon: '', value: Math.round(metrics.calories), unit: 'KCAL', x: 610, maxWidth: 155 },
-    { icon: '', value: '86', unit: 'SP', x: 817, maxWidth: 92 },
+    { icon: 'bolt', value: Math.round(metrics.avgPower), unit: 'AVG', x: 37, maxWidth: 178 },
+    { icon: 'route', value: metrics.distanceKm.toFixed(1), unit: 'km', x: 240, maxWidth: 155 },
+    { icon: 'clock', value: formatReportDuration(metrics.duration), unit: 'ET', x: 414, maxWidth: 150 },
+    { icon: null, value: Math.round(metrics.calories), unit: 'KCAL', x: 610, maxWidth: 155 },
+    { icon: null, value: '86', unit: 'SP', x: 817, maxWidth: 92 },
   ];
   stats.forEach((stat) => drawHeaderStat(stat));
 
@@ -741,31 +659,73 @@ function drawHeader(metrics, { title }) {
 function drawHeaderStat({ icon, value, unit, x, maxWidth }) {
   ctx.fillStyle = '#24242a';
   ctx.textAlign = 'left';
-  const prefix = icon ? `${icon} ` : '';
-  const text = `${prefix}${value}`;
-  let fontSize = 40;
-  ctx.font = `900 ${fontSize}px system-ui, sans-serif`;
-  while (ctx.measureText(text).width > maxWidth && fontSize > 30) {
+  const valueX = icon ? x + 32 : x;
+  if (icon) drawHeaderIcon(icon, x, 105);
+  const text = String(value);
+  let fontSize = 39;
+  ctx.font = reportFont(fontSize, 900, REPORT_NUMBER_FONT);
+  while (ctx.measureText(text).width > maxWidth && fontSize > 29) {
     fontSize -= 1;
-    ctx.font = `900 ${fontSize}px system-ui, sans-serif`;
+    ctx.font = reportFont(fontSize, 900, REPORT_NUMBER_FONT);
   }
-  ctx.fillText(text, x, 118);
-  const unitX = x + ctx.measureText(text).width + 4;
-  ctx.font = '900 15px system-ui, sans-serif';
-  ctx.fillText(unit, unitX, 118);
+  ctx.fillText(text, valueX, 118);
+  const unitX = valueX + ctx.measureText(text).width + 5;
+  ctx.font = reportFont(12);
+  ctx.fillText(unit, unitX, 116);
+}
+
+function drawHeaderIcon(type, x, y) {
+  ctx.save();
+  ctx.fillStyle = '#24242a';
+  ctx.strokeStyle = '#24242a';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (type === 'bolt') {
+    ctx.beginPath();
+    ctx.moveTo(x + 12, y - 16);
+    ctx.lineTo(x + 2, y + 2);
+    ctx.lineTo(x + 13, y + 2);
+    ctx.lineTo(x + 8, y + 20);
+    ctx.lineTo(x + 24, y - 4);
+    ctx.lineTo(x + 13, y - 4);
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === 'route') {
+    ctx.beginPath();
+    ctx.arc(x + 6, y + 8, 4, 0, Math.PI * 2);
+    ctx.arc(x + 24, y - 8, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x + 10, y + 5);
+    ctx.bezierCurveTo(x + 14, y - 10, x + 17, y + 8, x + 21, y - 5);
+    ctx.stroke();
+  } else if (type === 'clock') {
+    ctx.beginPath();
+    ctx.arc(x + 13, y, 12, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + 13, y);
+    ctx.lineTo(x + 13, y - 8);
+    ctx.moveTo(x + 13, y);
+    ctx.lineTo(x + 20, y + 4);
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
 function drawLevelProgress() {
   roundRect(ctx, 27, 133, 63, 16, 8, '#30343a');
   ctx.fillStyle = '#fff';
-  ctx.font = '900 13px system-ui, sans-serif';
+  ctx.font = reportFont(12);
   ctx.textAlign = 'center';
-  ctx.fillText('🚴 101', 58, 146);
+  ctx.fillText('🚴 100', 58, 146);
   roundRect(ctx, 96, 133, 878, 16, 8, '#c9c9c9');
-  ctx.fillStyle = '#ff5b1a';
-  ctx.fillRect(96, 133, 37, 16);
+  roundedLeftRect(ctx, 96, 133, 37, 16, 8, '#ff5b1a');
   ctx.fillStyle = '#151515';
-  ctx.font = '900 13px system-ui, sans-serif';
+  ctx.font = reportFont(12);
   ctx.textAlign = 'right';
   ctx.fillText('次のレベルまで 19192 XP', 966, 146);
 }
@@ -774,23 +734,25 @@ function drawAvatar() {
   ctx.save();
   ctx.translate(916, 54);
   ctx.rotate(-0.12);
-  roundRect(ctx, -53, -1, 69, 38, 9, '#d64a22');
+  roundRect(ctx, -53, -1, 69, 38, 9, '#2f8ef4');
   ctx.fillStyle = '#fff';
-  ctx.font = '900 22px system-ui, sans-serif';
+  ctx.font = reportFont(20);
   ctx.textAlign = 'center';
-  ctx.fillText('NICE!', -18, 26);
+  ctx.fillText('GO!', -18, 25);
   ctx.restore();
 
   ctx.save();
   ctx.translate(944, 101);
-  ctx.fillStyle = '#f0c7a2';
+  ctx.fillStyle = '#d9a47d';
   ctx.beginPath();
   ctx.arc(0, 0, 29, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#d8d8d8';
+  ctx.fillStyle = '#1f2937';
   ctx.beginPath();
   ctx.arc(2, -16, 31, Math.PI, 0);
   ctx.fill();
+  ctx.fillStyle = '#ff5b1a';
+  ctx.fillRect(-28, -18, 56, 8);
   ctx.fillStyle = '#111';
   ctx.beginPath();
   ctx.moveTo(-28, -7);
@@ -799,7 +761,7 @@ function drawAvatar() {
   ctx.lineTo(-22, 7);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = '#42e12f';
+  ctx.fillStyle = '#37d5ff';
   ctx.beginPath();
   ctx.moveTo(-20, -5);
   ctx.lineTo(0, -8);
@@ -814,6 +776,12 @@ function drawAvatar() {
   ctx.lineTo(4, 5);
   ctx.closePath();
   ctx.fill();
+  ctx.fillStyle = '#7c3f24';
+  ctx.beginPath();
+  ctx.arc(20, 11, 9, -0.3, 1.4);
+  ctx.strokeStyle = '#7c3f24';
+  ctx.lineWidth = 4;
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -825,7 +793,7 @@ function drawTabs() {
   [['全般', 310], ['タイムライン', 501], ['クリティカルパワー', 688]].forEach(([label, x]) => {
     ctx.fillStyle = '#fff';
     ctx.globalAlpha = label === 'タイムライン' ? 1 : 0.42;
-    ctx.font = '900 13px system-ui, sans-serif';
+    ctx.font = reportFont(13);
     ctx.textAlign = 'center';
     ctx.fillText(label, x, y + 16);
     ctx.globalAlpha = 1;
@@ -836,46 +804,79 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   const x = 27;
   const y = 195;
   const width = 948;
-  const height = 214;
+  const height = 198;
   roundRect(ctx, x, y, width, height, 10, '#2d2d2d');
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, width, height, 10);
   ctx.clip();
-  ctx.strokeStyle = 'rgba(255,255,255,.035)';
-  ctx.lineWidth = 1;
-  for (let i = 1; i < 5; i += 1) {
-    ctx.beginPath();
-    ctx.moveTo(x, y + (height * i) / 5);
-    ctx.lineTo(x + width, y + (height * i) / 5);
-    ctx.stroke();
-  }
-  const powers = rollingPower(metrics.records, 2);
+  const powers = rollingPower(metrics.records, 3);
+  const powerLine = rollingPower(metrics.records, 5);
   const maxGraphPower = Math.max(ftp * 1.45, metrics.maxPower, 1);
   metrics.records.forEach((record, index) => {
     const px = x + (index / Math.max(1, metrics.records.length - 1)) * width;
     const barW = Math.max(1, width / metrics.records.length + 0.25);
     const p = powers[index];
-    const barH = Math.min(height - 5, (p / maxGraphPower) * (height - 34));
+    const barH = Math.min(height - 5, (p / maxGraphPower) * (height - 58));
     ctx.fillStyle = zoneColor(p, ftp);
     ctx.globalAlpha = 0.82;
     ctx.fillRect(px, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
-  drawSeries(powers, x, y + 27, width, height - 40, maxGraphPower, '#fff', 2.4);
-  const hrs = rollingHeartRate(metrics.records, 3);
-  drawSeries(hrs, x, y + 20, width, height - 67, maxHrSetting, '#e11f28', 2.4, 0);
+  drawPowerLine(powerLine, x, y, width, height, maxGraphPower);
+  const hrs = rollingHeartRate(metrics.records, 5);
+  const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
+  const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
+  drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
   ctx.restore();
 
   const maxPowerIndex = powers.reduce((best, value, index) => value > powers[best] ? index : best, 0);
   const maxPowerX = x + (maxPowerIndex / Math.max(1, powers.length - 1)) * width;
-  drawPeakLabel(`${Math.round(metrics.maxPower)}w`, maxPowerX, y + 96, '#fff', '#ffb21a');
+  const maxPowerY = getPowerLineY(powers[maxPowerIndex], y, height, maxGraphPower);
+  drawPeakLabel(`${Math.round(powers[maxPowerIndex])}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22);
   if (metrics.maxHeartRate) {
-    const hrValues = metrics.records.map((r) => r.heartRate ?? -Infinity);
+    const hrValues = rollingHeartRate(metrics.records, 5);
     const maxHrIndex = hrValues.reduce((best, value, index) => value > hrValues[best] ? index : best, 0);
     const maxHrX = x + (maxHrIndex / Math.max(1, hrValues.length - 1)) * width;
-    drawPeakLabel(`${Math.round(metrics.maxHeartRate)}bpm`, maxHrX, y + 56, '#fff', '#e11f28');
+    const maxHrY = getSeriesY(hrValues[maxHrIndex], y + 28, height - 84, heartLineMax, heartLineMin);
+    drawPeakLabel(`${Math.round(hrValues[maxHrIndex])}bpm`, maxHrX, maxHrY - 16, '#fff', '#e11f28', y + 16, y + height - 22);
   }
+}
+
+function getSeriesY(value, y, height, max, min = 0) {
+  return y + height - ((value - min) / Math.max(1, max - min)) * height;
+}
+
+function getPowerLineY(value, y, height, max) {
+  return y + height - (value / Math.max(1, max)) * (height - 58);
+}
+
+function drawPowerLine(values, x, y, width, height, max) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  drawPowerLineStroke(values, x, y, width, height, max, 'rgba(45,45,45,.5)', 3.6);
+  drawPowerLineStroke(values, x, y, width, height, max, '#f8f8f2', 1.7);
+  ctx.restore();
+}
+
+function drawPowerLineStroke(values, x, y, width, height, max, color, lineWidth) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  let started = false;
+  values.forEach((value, index) => {
+    if (!Number.isFinite(value)) return;
+    const px = x + (index / Math.max(1, values.length - 1)) * width;
+    const py = getPowerLineY(value, y, height, max);
+    if (!started) {
+      ctx.moveTo(px, py);
+      started = true;
+    } else {
+      ctx.lineTo(px, py);
+    }
+  });
+  ctx.stroke();
 }
 
 function drawSeries(values, x, y, width, height, max, color, lineWidth, min = 0) {
@@ -897,16 +898,17 @@ function drawSeries(values, x, y, width, height, max, color, lineWidth, min = 0)
   ctx.stroke();
 }
 
-function drawPeakLabel(text, x, y, color, pointerColor) {
+function drawPeakLabel(text, x, y, color, pointerColor, minY = -Infinity, maxY = Infinity) {
+  const labelY = Math.max(minY, Math.min(maxY, y));
   ctx.fillStyle = color;
-  ctx.font = '900 13px system-ui, sans-serif';
+  ctx.font = reportFont(13);
   ctx.textAlign = 'center';
-  ctx.fillText(text, x, y);
+  ctx.fillText(text, x, labelY);
   ctx.fillStyle = pointerColor;
   ctx.beginPath();
-  ctx.moveTo(x - 4, y + 6);
-  ctx.lineTo(x + 4, y + 6);
-  ctx.lineTo(x, y + 13);
+  ctx.moveTo(x - 4, labelY + 6);
+  ctx.lineTo(x + 4, labelY + 6);
+  ctx.lineTo(x, labelY + 13);
   ctx.closePath();
   ctx.fill();
 }
@@ -914,90 +916,162 @@ function drawPeakLabel(text, x, y, color, pointerColor) {
 function drawLegends() {
   const items = [['パワー', true], ['ケイデンス', false], ['心拍数', true]];
   let x = 37;
+  const y = 414;
   items.forEach(([label, active]) => {
     ctx.strokeStyle = '#bdbdbd';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(x + 9, 428, 7, 0, Math.PI * 2);
+    ctx.arc(x + 9, y, 7, 0, Math.PI * 2);
     ctx.stroke();
     if (active) {
       ctx.fillStyle = '#ff5b1a';
       ctx.beginPath();
-      ctx.arc(x + 9, 428, 5, 0, Math.PI * 2);
+      ctx.arc(x + 9, y, 5, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.fillStyle = '#111';
-    ctx.font = '900 17px system-ui, sans-serif';
+    ctx.font = reportFont(17);
     ctx.textAlign = 'left';
-    ctx.fillText(label, x + 20, 435);
+    ctx.fillText(label, x + 20, y + 7);
     x += label === 'ケイデンス' ? 120 : 92;
   });
 }
 
 function drawDistributionPanels(metrics, options) {
-  roundRect(ctx, 27, 443, 449, 173, 9, '#2d2d2d');
-  roundRect(ctx, 525, 443, 449, 173, 9, '#2d2d2d');
+  const panelBottomY = 588;
+  roundRect(ctx, 27, 430, 449, 158, 9, '#2d2d2d');
+  roundRect(ctx, 525, 430, 449, 158, 9, '#2d2d2d');
   ctx.fillStyle = '#fff';
-  ctx.font = '900 19px system-ui, sans-serif';
+  ctx.font = reportFont(19);
   ctx.textAlign = 'center';
-  ctx.fillText('パワー分布', 251, 464);
-  ctx.fillText('心拍数分布', 749, 464);
-  drawPowerHistogram(metrics, 27, 464, 449, 144);
-  drawHeartHistogram(metrics, options, 525, 464, 449, 144);
+  ctx.fillText('パワー分布', 251, 452);
+  ctx.fillText('心拍数分布', 749, 452);
+  drawPowerHistogram(metrics, 34, 464, 436, 112, 610, panelBottomY);
+  drawHeartHistogram(metrics, options, 525, 452, 449, 124, 610, panelBottomY);
+  drawDistributionUnit(251, 628, 'ワット');
+  drawDistributionUnit(749, 628, 'bpm');
 }
 
-function drawPowerHistogram(metrics, x, y, width, height) {
-  const bins = makeHistogram(metrics.records.map((r) => r.power ?? 0), 100, 600, 22);
+function drawPowerHistogram(metrics, x, y, width, height, axisY, panelBottomY) {
+  const powerValues = metrics.records.map((r) => r.power).filter((value) => Number.isFinite(value) && value >= 100);
+  const maxPowerAxis = getPowerHistogramMax(powerValues);
+  const bins = makeHistogram(powerValues, 100, maxPowerAxis, 36);
   const maxBin = Math.max(...bins, 1);
+  const baselineY = panelBottomY;
   ctx.fillStyle = '#fff';
   bins.forEach((count, i) => {
-    const barW = width / bins.length - 1.5;
-    const barH = (count / maxBin) * (height - 58);
-    ctx.beginPath();
-    ctx.roundRect(x + i * (width / bins.length), y + height - barH - 24, barW, barH, 7);
-    ctx.fill();
+    const barW = width / bins.length + 0.5;
+    const barH = count ? Math.max(5, (count / maxBin) * (baselineY - y - 24)) : 0;
+    roundedTopRect(ctx, x + i * (width / bins.length), baselineY - barH, barW, barH, 10, '#fff');
   });
-  drawAxisLabels(x, y + height - 4, width, ['100', '150', '200', '250', '300', '350', '400', '450', '500', '550', '600'], 'ワット');
-  const avgX = x + ((metrics.avgPower - 100) / 500) * width;
-  ctx.strokeStyle = '#666';
+  drawAxisLabels(x, axisY, width, makeLinearLabels(100, maxPowerAxis, 11));
+  const avgX = x + ((metrics.avgPower - 100) / Math.max(1, maxPowerAxis - 100)) * width;
+  ctx.strokeStyle = '#8c8f93';
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(avgX, y + 42);
-  ctx.lineTo(avgX, y + height - 24);
+  ctx.moveTo(avgX, y + 34);
+  ctx.lineTo(avgX, baselineY);
   ctx.stroke();
   badge(`AVG
-${Math.round(metrics.avgPower)}`, avgX, y + 55);
+${Math.round(metrics.avgPower)}`, avgX, y + 18);
 }
 
-function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height) {
-  const minHr = 0.5 * maxHrSetting;
-  const colors = ['#2f8ef4', '#56bf5b', '#ffd045', '#ff683b', '#ff321a'];
+function getPowerHistogramMax(values) {
+  const maxValue = Math.max(...values, 600);
+  if (maxValue <= 600) return 600;
+  return Math.min(2000, Math.ceil(maxValue / 100) * 100);
+}
+
+function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height, axisY, panelBottomY) {
+  const displayMinHr = Math.max(40, Math.round((maxHrSetting * 0.32) / 5) * 5);
+  const zoneThresholds = [
+    0.5 * maxHrSetting,
+    0.6 * maxHrSetting,
+    0.7 * maxHrSetting,
+    0.8 * maxHrSetting,
+    0.9 * maxHrSetting,
+    maxHrSetting,
+  ];
+  const linearHrToX = (value) => x + ((value - displayMinHr) / Math.max(1, maxHrSetting - displayMinHr)) * width;
+  const colors = ['#338cf0', '#58b957', '#ffd342', '#ff6538', '#ff2f1d'];
+  const zoneStartX = Math.max(x, linearHrToX(zoneThresholds[0]));
+  const zoneWidthUnit = (x + width - zoneStartX) / 5;
+  const zoneWidths = [1.5, 1, 1, 1, 0.5].map((ratio) => ratio * zoneWidthUnit);
+  const hrToX = (value) => {
+    const clampedValue = Math.max(displayMinHr, Math.min(maxHrSetting, value));
+    if (clampedValue <= zoneThresholds[0]) {
+      return x + ((clampedValue - displayMinHr) / Math.max(1, zoneThresholds[0] - displayMinHr)) * (zoneStartX - x);
+    }
+    const zoneIndex = Math.min(
+      zoneWidths.length - 1,
+      Math.max(0, zoneThresholds.findIndex((threshold, index) => index > 0 && clampedValue <= threshold) - 1),
+    );
+    const zoneMin = zoneThresholds[zoneIndex];
+    const zoneMax = zoneThresholds[zoneIndex + 1];
+    const zoneX = zoneStartX + zoneWidths.slice(0, zoneIndex).reduce((sum, zoneWidth) => sum + zoneWidth, 0);
+    return zoneX + ((clampedValue - zoneMin) / Math.max(1, zoneMax - zoneMin)) * zoneWidths[zoneIndex];
+  };
+  const xToHr = (position) => {
+    if (position <= zoneStartX) {
+      return displayMinHr + ((position - x) / Math.max(1, zoneStartX - x)) * (zoneThresholds[0] - displayMinHr);
+    }
+    let zoneX = zoneStartX;
+    for (let i = 0; i < zoneWidths.length; i += 1) {
+      const nextZoneX = i === zoneWidths.length - 1 ? x + width : zoneX + zoneWidths[i];
+      if (position <= nextZoneX || i === zoneWidths.length - 1) {
+        return zoneThresholds[i] + ((position - zoneX) / Math.max(1, nextZoneX - zoneX)) * (zoneThresholds[i + 1] - zoneThresholds[i]);
+      }
+      zoneX = nextZoneX;
+    }
+    return maxHrSetting;
+  };
+  const axisLabels = Array.from({ length: 11 }, (_, index) => {
+    const labelX = x + (index / 10) * width;
+    return { label: String(Math.round(xToHr(labelX))), x: labelX };
+  });
+  let zoneX = zoneStartX;
   colors.forEach((color, i) => {
-    const start = x + (i / colors.length) * width;
+    const start = zoneX;
+    const end = i === colors.length - 1 ? x + width : Math.min(x + width, start + zoneWidths[i]);
+    zoneX = end;
+    if (end <= start) return;
     ctx.fillStyle = color;
-    ctx.fillRect(start, y, width / colors.length, height - 30);
+    ctx.fillRect(start, y, end - start, panelBottomY - y);
     ctx.globalAlpha = 0.28;
     ctx.fillStyle = '#fff';
-    ctx.font = '900 13px system-ui, sans-serif';
+    ctx.font = reportFont(13);
     ctx.textAlign = 'center';
-    ctx.fillText(`Z${i + 1}`, start + width / colors.length / 2, y + 17);
+    ctx.fillText(`Z${i + 1}`, start + (end - start) / 2, y + 17);
     ctx.globalAlpha = 1;
   });
   const values = metrics.records.map((r) => r.heartRate).filter(Number.isFinite);
-  const bins = makeHistogram(values, Math.round(minHr), maxHrSetting, 18);
+  const bins = makeMappedHistogram(values, 30, (value) => hrToX(value), x, width);
   const maxBin = Math.max(...bins, 1);
+  const baselineY = panelBottomY;
   ctx.fillStyle = '#fff';
   bins.forEach((count, i) => {
-    const barW = width / bins.length - 2;
-    const barH = (count / maxBin) * (height - 63);
-    ctx.beginPath();
-    ctx.roundRect(x + i * (width / bins.length), y + height - barH - 30, barW, barH, 7);
-    ctx.fill();
+    const barW = width / bins.length + 0.5;
+    const barX = x + i * (width / bins.length);
+    const barH = count ? Math.max(7, (count / maxBin) * (baselineY - y - 42)) : 0;
+    roundedTopRect(ctx, barX, baselineY - barH, barW, barH, 10, '#fff');
   });
-  drawAxisLabels(x, y + height - 4, width, ['60', '73', '85', '98', '110', '123', '136', '148', '161', '173', String(maxHrSetting)], 'bpm');
-  const avgX = x + ((metrics.avgHeartRate - minHr) / Math.max(1, maxHrSetting - minHr)) * width;
+  drawAxisLabelsAt(axisY, axisLabels);
+  const avgX = hrToX(metrics.avgHeartRate);
+  ctx.strokeStyle = '#8c8f93';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(avgX, y + 34);
+  ctx.lineTo(avgX, baselineY);
+  ctx.stroke();
   badge(`AVG
-${Math.round(metrics.avgHeartRate)}`, avgX, y + 58);
+${Math.round(metrics.avgHeartRate)}`, avgX, y + 28);
+}
+
+function makeLinearLabels(min, max, count) {
+  return Array.from({ length: count }, (_, index) => {
+    const value = min + ((max - min) * index) / Math.max(1, count - 1);
+    return String(Math.round(value));
+  });
 }
 
 function makeHistogram(values, min, max, bins) {
@@ -1010,34 +1084,57 @@ function makeHistogram(values, min, max, bins) {
   return hist;
 }
 
-function drawAxisLabels(x, y, width, labels, unit) {
+function makeMappedHistogram(values, bins, mapValueToX, x, width) {
+  const hist = Array.from({ length: bins }, () => 0);
+  values.forEach((value) => {
+    if (!Number.isFinite(value)) return;
+    const mappedX = mapValueToX(value);
+    const index = Math.max(0, Math.min(bins - 1, Math.floor(((mappedX - x) / Math.max(1, width)) * bins)));
+    hist[index] += 1;
+  });
+  return hist;
+}
+
+function drawAxisLabels(x, y, width, labels) {
   ctx.fillStyle = '#1c1c1c';
-  ctx.font = '900 11px system-ui, sans-serif';
+  ctx.font = reportFont(11, 900, REPORT_NUMBER_FONT);
   ctx.textAlign = 'center';
-  labels.forEach((label, i) => ctx.fillText(label, x + (i / (labels.length - 1)) * width, y - 7));
-  ctx.font = '900 14px system-ui, sans-serif';
-  ctx.fillText(unit, x + width / 2, y + 15);
+  labels.forEach((label, i) => ctx.fillText(label, x + (i / (labels.length - 1)) * width, y));
+}
+
+function drawAxisLabelsAt(y, labels) {
+  ctx.fillStyle = '#1c1c1c';
+  ctx.font = reportFont(11, 900, REPORT_NUMBER_FONT);
+  ctx.textAlign = 'center';
+  labels.forEach(({ label, x }) => ctx.fillText(label, x, y));
+}
+
+function drawDistributionUnit(x, y, unit) {
+  ctx.fillStyle = '#1c1c1c';
+  ctx.font = reportFont(14);
+  ctx.textAlign = 'center';
+  ctx.fillText(unit, x, y);
 }
 
 function badge(text, x, y) {
   const lines = text.split('\n');
-  roundRect(ctx, x - 25, y - 23, 50, 45, 10, '#8a8d91');
+  roundRect(ctx, x - 20, y - 20, 40, 38, 8, '#8a8d91');
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center';
-  ctx.font = '900 11px system-ui, sans-serif';
+  ctx.font = reportFont(9);
   ctx.fillText(lines[0], x, y - 7);
-  ctx.font = '900 20px system-ui, sans-serif';
-  ctx.fillText(lines[1], x, y + 14);
+  ctx.font = reportFont(17, 900, REPORT_NUMBER_FONT);
+  ctx.fillText(lines[1], x, y + 11);
 }
 
 function zoneColor(power, ftp) {
   const ratio = power / ftp;
-  if (ratio < 0.55) return '#9aa0a6';
-  if (ratio < 0.75) return '#2f8ef4';
-  if (ratio < 0.9) return '#56bf5b';
-  if (ratio < 1.05) return '#ffd045';
-  if (ratio < 1.2) return '#ff8a2a';
-  return '#d72d16';
+  if (ratio < 0.55) return '#8b8f91';
+  if (ratio < 0.75) return '#2d73b8';
+  if (ratio < 0.9) return '#5a9e45';
+  if (ratio < 1.05) return '#c4a927';
+  if (ratio < 1.2) return '#d95f21';
+  return '#bf2b20';
 }
 
 function formatDuration(seconds) {
@@ -1049,10 +1146,46 @@ function formatDuration(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+function formatReportDuration(seconds) {
+  const totalMinutes = Math.max(0, Math.floor(seconds / 60));
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h) return `${h}:${String(m).padStart(2, '0')}`;
+  return String(m);
+}
+
 function roundRect(context, x, y, width, height, radius, fillStyle) {
   context.fillStyle = fillStyle;
   context.beginPath();
   context.roundRect(x, y, width, height, radius);
+  context.fill();
+}
+
+function roundedTopRect(context, x, y, width, height, radius, fillStyle) {
+  const r = Math.min(radius, width / 2, height);
+  context.fillStyle = fillStyle;
+  context.beginPath();
+  context.moveTo(x, y + height);
+  context.lineTo(x, y + r);
+  context.quadraticCurveTo(x, y, x + r, y);
+  context.lineTo(x + width - r, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + r);
+  context.lineTo(x + width, y + height);
+  context.closePath();
+  context.fill();
+}
+
+function roundedLeftRect(context, x, y, width, height, radius, fillStyle) {
+  const r = Math.min(radius, width, height / 2);
+  context.fillStyle = fillStyle;
+  context.beginPath();
+  context.moveTo(x + width, y);
+  context.lineTo(x + r, y);
+  context.quadraticCurveTo(x, y, x, y + r);
+  context.lineTo(x, y + height - r);
+  context.quadraticCurveTo(x, y + height, x + r, y + height);
+  context.lineTo(x + width, y + height);
+  context.closePath();
   context.fill();
 }
 
