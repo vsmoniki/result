@@ -243,7 +243,7 @@ function csvRowToRecord(headers, row, index) {
   return {
     timestamp: timestamp || fallbackTimestamp,
     elapsed: Number.isFinite(elapsed) ? elapsed : undefined,
-    power: readCsvNumber(headers, row, [['power'], ['watts'], ['watt'], ['w'], ['パワー']]),
+    power: readCsvNumber(headers, row, [['power'], ['watts'], ['watt'], ['w'], ['パワー'], ['ワット']]),
     heart_rate: readCsvNumber(headers, row, [['heartrate'], ['heart rate'], ['hr'], ['bpm'], ['心拍'], ['心拍数']]),
     cadence: readCsvNumber(headers, row, [['cadence'], ['rpm'], ['ケイデンス']]),
     distance: normalizeDistance(distance),
@@ -396,6 +396,11 @@ function setStatus(message, isError = false) {
   $('#status').classList.toggle('error', isError);
 }
 
+function calculateWattsPerKg(power, weight) {
+  if (!Number.isFinite(power) || !Number.isFinite(weight) || weight <= 0) return 0;
+  return power / weight;
+}
+
 function extractMetrics(data, sourceLabel = 'FIT') {
   const records = (data.records || [])
     .filter((record) => record.timestamp)
@@ -417,12 +422,12 @@ function extractMetrics(data, sourceLabel = 'FIT') {
     if (!Number.isFinite(record.elapsed)) record.elapsed = Math.max(0, (record.timestamp.getTime() - firstTime) / 1000);
   });
 
-  const powers = records.map((r) => r.power ?? 0);
+  const powers = records.map((r) => r.power).filter(Number.isFinite);
   const heartRates = records.map((r) => r.heartRate).filter(Number.isFinite);
   const duration = Math.max(...records.map((r) => r.elapsed));
   const lastDistance = [...records].reverse().find((r) => Number.isFinite(r.distance))?.distance ?? 0;
   const avgPower = average(powers);
-  const maxPower = Math.max(...powers);
+  const maxPower = powers.length ? Math.max(...powers) : 0;
   const maxHeartRate = heartRates.length ? Math.max(...heartRates) : 0;
   const avgHeartRate = heartRates.length ? average(heartRates) : 0;
   const calories = data.sessions?.[0]?.total_calories ?? Math.round(avgPower * duration / 1000 * 0.96);
@@ -449,18 +454,30 @@ function clean(value) {
   return Number.isFinite(value) ? value : undefined;
 }
 
-function bestRollingAverage(records, seconds) {
+function bestRollingAverage(records, seconds, field = 'power') {
   let best = 0;
   let sum = 0;
+  let validCount = 0;
   let left = 0;
   for (let right = 0; right < records.length; right += 1) {
-    sum += records[right].power ?? 0;
+    const rightValue = records[right][field];
+    if (Number.isFinite(rightValue)) {
+      sum += rightValue;
+      validCount += 1;
+    }
     while (records[right].elapsed - records[left].elapsed > seconds) {
-      sum -= records[left].power ?? 0;
+      const leftValue = records[left][field];
+      if (Number.isFinite(leftValue)) {
+        sum -= leftValue;
+        validCount -= 1;
+      }
       left += 1;
     }
     const span = Math.max(1, records[right].elapsed - records[left].elapsed + 1);
-    if (span >= seconds * 0.9) best = Math.max(best, sum / (right - left + 1));
+    if (span >= seconds * 0.9 && validCount) best = Math.max(best, sum / validCount);
+  }
+  if (best === 0) {
+    return average(records.map((record) => record[field]));
   }
   return best;
 }
@@ -519,7 +536,7 @@ function drawFinishResult(metrics, weight) {
   labels.forEach(([label, seconds], index) => {
     const x = 95 + index * 90;
     ctx.font = '400 36px system-ui, sans-serif';
-    ctx.fillText((metrics.bestPower[seconds] / weight).toFixed(1), x, 384);
+    ctx.fillText(calculateWattsPerKg(metrics.bestPower[seconds], weight).toFixed(1), x, 384);
     ctx.font = '400 15px system-ui, sans-serif';
     ctx.fillText(label, x, 420);
   });
