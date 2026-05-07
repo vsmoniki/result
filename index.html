@@ -10,16 +10,16 @@
     <div id="app">
       <main class="shell">
         <section class="hero">
-          <p class="eyebrow">FITファイルからPNG生成</p>
+          <p class="eyebrow">FIT/CSVファイルからPNG生成</p>
           <h1>Zwift風リザルト画像メーカー</h1>
-          <p>FITファイルをブラウザ内で解析し、完走タイム画面またはライドレポート画面を生成します。画像はサーバーへ送信されません。</p>
+          <p>FITまたはCSVファイルをブラウザ内で解析し、完走タイム画面またはライドレポート画面を生成します。画像はサーバーへ送信されません。</p>
         </section>
 
         <section class="panel controls">
           <label class="file-drop" for="fitFile">
-            <span>FITファイルを選択</span>
+            <span>FITまたはCSVファイルを選択</span>
             <strong id="fileName">未選択</strong>
-            <input id="fitFile" type="file" accept=".fit,application/octet-stream" />
+            <input id="fitFile" type="file" accept=".fit,.csv,text/csv,application/octet-stream" />
           </label>
 
           <div class="mode-grid" role="tablist" aria-label="作成する画像タイプ">
@@ -41,7 +41,7 @@
             <button id="generate" type="button">画像を作成</button>
             <a id="download" class="download disabled" download="zwift-result.png">PNGを保存</a>
           </div>
-          <p id="status" class="status">FITファイルを選択してください。</p>
+          <p id="status" class="status">FITまたはCSVファイルを選択してください。</p>
         </section>
 
         <section class="panel preview-panel">
