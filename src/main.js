@@ -646,7 +646,8 @@ function calculateNormalizedPower(records) {
     for (let left = right; left >= 0; left--) {
       if (rightElapsed - records[left].elapsed > windowSeconds) break;
       const p = records[left].power;
-      if (Number.isFinite(p)) { sum += p; count++; }
+      sum += Number.isFinite(p) ? p : 0;
+      count++;
     }
     if (count > 0) rollingAvgs.push(sum / count);
   }
