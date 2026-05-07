@@ -1175,11 +1175,12 @@ function formatDuration(seconds) {
 }
 
 function formatReportDuration(seconds) {
-  const totalMinutes = Math.max(0, Math.floor(seconds / 60));
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
+  const total = Math.max(0, Math.round(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
   if (h) return `${h}:${String(m).padStart(2, '0')}`;
-  return String(m);
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 function roundRect(context, x, y, width, height, radius, fillStyle) {
