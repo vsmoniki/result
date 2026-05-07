@@ -838,13 +838,13 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   ctx.beginPath();
   ctx.roundRect(x, y, width, height, 10);
   ctx.clip();
-  const powers = rollingPower(metrics.records, 3);
-  const powerLine = rollingPower(metrics.records, 5);
+  const maxSamples = width;
+  const powers = downsampleSeries(rollingPower(metrics.records, 3), maxSamples);
+  const powerLine = downsampleSeries(rollingPower(metrics.records, 5), maxSamples);
   const maxGraphPower = Math.max(ftp * 1.45, metrics.maxPower, 1);
-  metrics.records.forEach((record, index) => {
-    const px = x + (index / Math.max(1, metrics.records.length - 1)) * width;
-    const barW = Math.max(1, width / metrics.records.length + 0.25);
-    const p = powers[index];
+  powers.forEach((p, index) => {
+    const px = x + (index / Math.max(1, powers.length - 1)) * width;
+    const barW = Math.max(1, width / powers.length + 0.25);
     const barH = Math.min(height - 5, (p / maxGraphPower) * (height - 58));
     ctx.fillStyle = zoneColor(p, ftp);
     ctx.globalAlpha = 0.82;
@@ -852,7 +852,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   });
   ctx.globalAlpha = 1;
   drawPowerLine(powerLine, x, y, width, height, maxGraphPower);
-  const hrs = rollingHeartRate(metrics.records, 5);
+  const hrs = downsampleSeries(rollingHeartRate(metrics.records, 5), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
   drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
@@ -863,11 +863,10 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   const maxPowerY = getPowerLineY(powers[maxPowerIndex], y, height, maxGraphPower);
   drawPeakLabel(`${Math.round(powers[maxPowerIndex])}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22);
   if (metrics.maxHeartRate) {
-    const hrValues = rollingHeartRate(metrics.records, 5);
-    const maxHrIndex = hrValues.reduce((best, value, index) => value > hrValues[best] ? index : best, 0);
-    const maxHrX = x + (maxHrIndex / Math.max(1, hrValues.length - 1)) * width;
-    const maxHrY = getSeriesY(hrValues[maxHrIndex], y + 28, height - 84, heartLineMax, heartLineMin);
-    drawPeakLabel(`${Math.round(hrValues[maxHrIndex])}bpm`, maxHrX, maxHrY - 16, '#fff', '#e11f28', y + 16, y + height - 22);
+    const maxHrIndex = hrs.reduce((best, value, index) => (Number.isFinite(value) && value > (hrs[best] || 0)) ? index : best, 0);
+    const maxHrX = x + (maxHrIndex / Math.max(1, hrs.length - 1)) * width;
+    const maxHrY = getSeriesY(hrs[maxHrIndex], y + 28, height - 84, heartLineMax, heartLineMin);
+    drawPeakLabel(`${Math.round(hrs[maxHrIndex])}bpm`, maxHrX, maxHrY - 16, '#fff', '#e11f28', y + 16, y + height - 22);
   }
 }
 
@@ -905,6 +904,19 @@ function drawPowerLineStroke(values, x, y, width, height, max, color, lineWidth)
     }
   });
   ctx.stroke();
+}
+
+function downsampleSeries(values, maxPoints) {
+  if (values.length <= maxPoints) return values;
+  const result = [];
+  const ratio = values.length / maxPoints;
+  for (let i = 0; i < maxPoints; i++) {
+    const start = Math.floor(i * ratio);
+    const end = Math.min(values.length, Math.floor((i + 1) * ratio));
+    const slice = values.slice(start, end).filter(Number.isFinite);
+    result.push(slice.length ? slice.reduce((a, b) => a + b, 0) / slice.length : NaN);
+  }
+  return result;
 }
 
 function drawSeries(values, x, y, width, height, max, color, lineWidth, min = 0) {
