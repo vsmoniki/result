@@ -18,15 +18,14 @@ const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = $('#fitFile');
 const fileDrop = $('#fileDrop');
-const fileSelectButton = $('#fileSelectButton');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
-fileDrop.addEventListener('click', handleFileDropClick);
+fileDrop.addEventListener('click', prepareFilePicker);
 fileDrop.addEventListener('dragover', handleFileDragOver);
 fileDrop.addEventListener('dragleave', handleFileDragLeave);
 fileDrop.addEventListener('drop', handleFileDrop);
-fileSelectButton.addEventListener('click', openFilePicker);
+fileInput.addEventListener('click', prepareFilePicker);
 fileInput.addEventListener('input', handleFile);
 fileInput.addEventListener('change', handleFile);
 $('#generate').addEventListener('click', generateImage);
@@ -40,17 +39,12 @@ function syncMode() {
   drawPlaceholder();
 }
 
-function handleFileDropClick(event) {
-  if (event.target === fileInput || event.target === fileSelectButton) return;
-  openFilePicker();
-}
-
-function openFilePicker() {
-  // Clear before opening the picker so choosing the same file again still fires
-  // a change/input event, while keeping the selected file visible after selection.
+function prepareFilePicker() {
+  // Clear before the native picker opens so choosing the same file again still
+  // fires a change/input event. The picker itself is opened by the label/input
+  // default action, which is more reliable than a synthetic fileInput.click().
   state.fileInputKey = null;
   fileInput.value = '';
-  fileInput.click();
 }
 
 async function handleFile(event) {
