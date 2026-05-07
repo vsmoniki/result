@@ -5,10 +5,18 @@ const $ = (selector) => document.querySelector(selector);
 const state = { sourceData: null, metrics: null, downloadUrl: null };
 const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
+const fileInput = $('#fitFile');
+const fileDrop = $('#fileDrop');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
-$('#fitFile').addEventListener('change', handleFile);
+fileDrop.addEventListener('click', openFilePicker);
+fileDrop.addEventListener('keydown', handleFileDropKeydown);
+fileDrop.addEventListener('dragover', handleFileDragOver);
+fileDrop.addEventListener('dragleave', handleFileDragLeave);
+fileDrop.addEventListener('drop', handleFileDrop);
+fileInput.addEventListener('click', resetFileInput);
+fileInput.addEventListener('change', handleFile);
 $('#generate').addEventListener('click', generateImage);
 
 function syncMode() {
@@ -22,9 +30,54 @@ function syncMode() {
 async function handleFile(event) {
   const file = event.target.files?.[0];
   if (!file) return;
+  await processSelectedFile(file);
+}
+
+function openFilePicker() {
+  fileInput.click();
+}
+
+function resetFileInput() {
+  fileInput.value = '';
+}
+
+function handleFileDropKeydown(event) {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  event.preventDefault();
+  openFilePicker();
+}
+
+function handleFileDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'copy';
+  fileDrop.classList.add('drag-over');
+}
+
+function handleFileDragLeave() {
+  fileDrop.classList.remove('drag-over');
+}
+
+async function handleFileDrop(event) {
+  event.preventDefault();
+  fileDrop.classList.remove('drag-over');
+  const file = [...(event.dataTransfer?.files || [])].find(isSupportedActivityFile);
+  if (!file) {
+    setStatus('FITまたはCSVファイルをドロップしてください。', true);
+    return;
+  }
+  await processSelectedFile(file);
+}
+
+async function processSelectedFile(file) {
   $('#fileName').textContent = file.name;
+  $('#download').classList.add('disabled');
+  if (state.downloadUrl) {
+    URL.revokeObjectURL(state.downloadUrl);
+    state.downloadUrl = null;
+  }
+
   const fileType = getFileType(file);
-  setStatus(`${fileType.label}ファイルを解析中…`);
+  setStatus(`${fileType.label}ファイルを読み込み中…`);
   try {
     state.sourceData = await parseActivityFile(file, fileType);
     state.metrics = extractMetrics(state.sourceData, fileType.label);
@@ -34,15 +87,20 @@ async function handleFile(event) {
     state.sourceData = null;
     state.metrics = null;
     $('#summary').textContent = '';
-    setStatus(`${fileType.label}ファイルを解析できませんでした: ${formatError(error)}`, true);
+    setStatus(`${fileType.label}ファイルを読み込めませんでした: ${formatError(error)}`, true);
   }
 }
 
 
 function getFileType(file) {
   const name = file.name.toLowerCase();
-  if (name.endsWith('.csv') || file.type === 'text/csv') return { label: 'CSV', type: 'csv' };
+  if (name.endsWith('.csv') || /(?:^|\/)csv$|text\/plain/.test(file.type)) return { label: 'CSV', type: 'csv' };
   return { label: 'FIT', type: 'fit' };
+}
+
+function isSupportedActivityFile(file) {
+  const name = file.name.toLowerCase();
+  return name.endsWith('.fit') || name.endsWith('.csv') || ['text/csv', 'application/csv', 'application/vnd.ant.fit', 'application/octet-stream'].includes(file.type);
 }
 
 async function parseActivityFile(file, fileType) {
@@ -381,7 +439,7 @@ function drawPlaceholder() {
   ctx.fillStyle = 'rgba(255,255,255,.92)';
   ctx.font = '800 72px system-ui, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('FITファイルを選択して画像を作成', w / 2, h / 2);
+  ctx.fillText('FIT/CSVファイルを選択して画像を作成', w / 2, h / 2);
 }
 
 function drawFinishResult(metrics, weight) {
