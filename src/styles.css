@@ -199,7 +199,8 @@ button,
   box-shadow: none;
 }
 
-.download.disabled {
+.download.disabled,
+button:disabled {
   pointer-events: none;
   opacity: .42;
 }
