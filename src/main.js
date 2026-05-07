@@ -145,11 +145,19 @@ function bestRollingAverage(records, seconds) {
   return best;
 }
 
-function rollingPower(records, windowSize = 3) {
+function rollingMetric(records, field, windowSize) {
   return records.map((record, index) => {
     const from = Math.max(0, index - windowSize + 1);
-    return average(records.slice(from, index + 1).map((r) => r.power ?? 0));
+    return average(records.slice(from, index + 1).map((r) => r[field]));
   });
+}
+
+function rollingPower(records, windowSize = 2) {
+  return rollingMetric(records, 'power', windowSize).map((value) => value || 0);
+}
+
+function rollingHeartRate(records, windowSize = 3) {
+  return rollingMetric(records, 'heartRate', windowSize).map((value) => value || NaN);
 }
 
 function average(values) {
@@ -232,26 +240,34 @@ function drawHeader(metrics, { title }) {
   ctx.fillText(title, 27, 72);
 
   const stats = [
-    ['⚡', Math.round(metrics.avgPower), 'AVG'],
-    ['〽', metrics.distanceKm.toFixed(1), 'km'],
-    ['◷', formatDuration(metrics.duration), 'ET'],
-    ['', Math.round(metrics.calories), 'KCAL'],
-    ['', '86', 'SP'],
+    { icon: '⚡', value: Math.round(metrics.avgPower), unit: 'AVG', x: 37, maxWidth: 178 },
+    { icon: '〽', value: metrics.distanceKm.toFixed(1), unit: 'km', x: 240, maxWidth: 155 },
+    { icon: '◷', value: formatDuration(metrics.duration), unit: 'ET', x: 414, maxWidth: 175 },
+    { icon: '', value: Math.round(metrics.calories), unit: 'KCAL', x: 610, maxWidth: 155 },
+    { icon: '', value: '86', unit: 'SP', x: 817, maxWidth: 92 },
   ];
-  const xs = [37, 272, 443, 611, 817];
-  stats.forEach(([icon, value, unit], index) => {
-    ctx.fillStyle = '#24242a';
-    ctx.textAlign = 'left';
-    ctx.font = '900 40px system-ui, sans-serif';
-    const prefix = icon ? `${icon} ` : '';
-    ctx.fillText(`${prefix}${value}`, xs[index], 118);
-    const unitOffset = String(value).length * 23 + (icon ? 47 : 7);
-    ctx.font = '900 15px system-ui, sans-serif';
-    ctx.fillText(unit, xs[index] + unitOffset, 118);
-  });
+  stats.forEach((stat) => drawHeaderStat(stat));
 
   drawLevelProgress();
   drawAvatar();
+}
+
+
+function drawHeaderStat({ icon, value, unit, x, maxWidth }) {
+  ctx.fillStyle = '#24242a';
+  ctx.textAlign = 'left';
+  const prefix = icon ? `${icon} ` : '';
+  const text = `${prefix}${value}`;
+  let fontSize = 40;
+  ctx.font = `900 ${fontSize}px system-ui, sans-serif`;
+  while (ctx.measureText(text).width > maxWidth && fontSize > 30) {
+    fontSize -= 1;
+    ctx.font = `900 ${fontSize}px system-ui, sans-serif`;
+  }
+  ctx.fillText(text, x, 118);
+  const unitX = x + ctx.measureText(text).width + 4;
+  ctx.font = '900 15px system-ui, sans-serif';
+  ctx.fillText(unit, unitX, 118);
 }
 
 function drawLevelProgress() {
@@ -349,20 +365,20 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
     ctx.lineTo(x + width, y + (height * i) / 5);
     ctx.stroke();
   }
-  const powers = rollingPower(metrics.records, 3);
+  const powers = rollingPower(metrics.records, 2);
   const maxGraphPower = Math.max(ftp * 1.45, metrics.maxPower, 1);
   metrics.records.forEach((record, index) => {
     const px = x + (index / Math.max(1, metrics.records.length - 1)) * width;
     const barW = Math.max(1, width / metrics.records.length + 0.25);
     const p = powers[index];
-    const barH = Math.min(height - 3, (p / maxGraphPower) * (height - 31));
+    const barH = Math.min(height - 5, (p / maxGraphPower) * (height - 34));
     ctx.fillStyle = zoneColor(p, ftp);
     ctx.globalAlpha = 0.82;
     ctx.fillRect(px, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
-  drawSeries(powers, x, y + 25, width, height - 36, maxGraphPower, '#fff', 2.4);
-  const hrs = metrics.records.map((r) => r.heartRate ?? NaN);
+  drawSeries(powers, x, y + 27, width, height - 40, maxGraphPower, '#fff', 2.4);
+  const hrs = rollingHeartRate(metrics.records, 3);
   drawSeries(hrs, x, y + 20, width, height - 67, maxHrSetting, '#e11f28', 2.4, 0);
   ctx.restore();
 
@@ -441,8 +457,8 @@ function drawDistributionPanels(metrics, options) {
   ctx.textAlign = 'center';
   ctx.fillText('パワー分布', 251, 464);
   ctx.fillText('心拍数分布', 749, 464);
-  drawPowerHistogram(metrics, 27, 464, 449, 152);
-  drawHeartHistogram(metrics, options, 525, 464, 449, 152);
+  drawPowerHistogram(metrics, 27, 464, 449, 144);
+  drawHeartHistogram(metrics, options, 525, 464, 449, 144);
 }
 
 function drawPowerHistogram(metrics, x, y, width, height) {
@@ -456,7 +472,7 @@ function drawPowerHistogram(metrics, x, y, width, height) {
     ctx.roundRect(x + i * (width / bins.length), y + height - barH - 24, barW, barH, 7);
     ctx.fill();
   });
-  drawAxisLabels(x, y + height, width, ['100', '150', '200', '250', '300', '350', '400', '450', '500', '550', '600'], 'ワット');
+  drawAxisLabels(x, y + height - 4, width, ['100', '150', '200', '250', '300', '350', '400', '450', '500', '550', '600'], 'ワット');
   const avgX = x + ((metrics.avgPower - 100) / 500) * width;
   ctx.strokeStyle = '#666';
   ctx.lineWidth = 3;
@@ -493,7 +509,7 @@ function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height) {
     ctx.roundRect(x + i * (width / bins.length), y + height - barH - 30, barW, barH, 7);
     ctx.fill();
   });
-  drawAxisLabels(x, y + height, width, ['60', '73', '85', '98', '110', '123', '136', '148', '161', '173', String(maxHrSetting)], 'bpm');
+  drawAxisLabels(x, y + height - 4, width, ['60', '73', '85', '98', '110', '123', '136', '148', '161', '173', String(maxHrSetting)], 'bpm');
   const avgX = x + ((metrics.avgHeartRate - minHr) / Math.max(1, maxHrSetting - minHr)) * width;
   badge(`AVG
 ${Math.round(metrics.avgHeartRate)}`, avgX, y + 58);
@@ -515,7 +531,7 @@ function drawAxisLabels(x, y, width, labels, unit) {
   ctx.textAlign = 'center';
   labels.forEach((label, i) => ctx.fillText(label, x + (i / (labels.length - 1)) * width, y - 7));
   ctx.font = '900 14px system-ui, sans-serif';
-  ctx.fillText(unit, x + width / 2, y + 9);
+  ctx.fillText(unit, x + width / 2, y + 15);
 }
 
 function badge(text, x, y) {
