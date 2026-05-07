@@ -678,10 +678,9 @@ function drawHeader(metrics, { title, ftp }) {
     { icon: null, value: Math.round(metrics.calories), unit: 'KCAL', x: 610, maxWidth: 155 },
     { icon: null, value: tss, unit: 'SP', x: 817, maxWidth: 92 },
   ];
-  stats.forEach((stat) => drawHeaderStat(stat));
-
   drawLevelProgress();
   drawAvatar();
+  stats.forEach((stat) => drawHeaderStat(stat));
 }
 
 
