@@ -14,7 +14,6 @@ fileDrop.addEventListener('keydown', handleFileDropKeydown);
 fileDrop.addEventListener('dragover', handleFileDragOver);
 fileDrop.addEventListener('dragleave', handleFileDragLeave);
 fileDrop.addEventListener('drop', handleFileDrop);
-fileInput.addEventListener('click', resetFileInput);
 fileInput.addEventListener('change', handleFile);
 $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
@@ -30,16 +29,12 @@ function syncMode() {
 async function handleFile(event) {
   const file = event.target.files?.[0];
   if (!file) return;
+  event.target.value = '';
   await processSelectedFile(file);
 }
 
 function openFilePicker() {
-  fileInput.value = '';
   fileInput.click();
-}
-
-function resetFileInput() {
-  fileInput.value = '';
 }
 
 function handleFileDropKeydown(event) {
