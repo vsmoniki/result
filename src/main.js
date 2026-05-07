@@ -12,6 +12,13 @@ const state = {
   fileInputKey: null,
   isLoadingFile: false,
 };
+
+// Guard against ghost clicks that some browsers (e.g. iOS Safari) fire on the
+// label after the native file picker closes, which would clear fileInput.value
+// before the change event fires and make handleFile see no file.
+let pickerIsActive = false;
+let pickerActivatedAt = 0;
+const PICKER_TIMEOUT_MS = 30_000;
 const DEFAULT_CANVAS_WIDTH = 1920;
 const DEFAULT_CANVAS_HEIGHT = 1080;
 const canvas = $('#canvas');
@@ -26,8 +33,12 @@ fileDrop.addEventListener('dragover', handleFileDragOver);
 fileDrop.addEventListener('dragleave', handleFileDragLeave);
 fileDrop.addEventListener('drop', handleFileDrop);
 fileInput.addEventListener('click', prepareFilePicker);
+fileInput.addEventListener('cancel', onPickerClose);
 fileInput.addEventListener('input', handleFile);
 fileInput.addEventListener('change', handleFile);
+window.addEventListener('focus', () => {
+  if (pickerIsActive) setTimeout(onPickerClose, 500);
+});
 $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
 
@@ -40,14 +51,25 @@ function syncMode() {
 }
 
 function prepareFilePicker() {
-  // Clear before the native picker opens so choosing the same file again still
-  // fires a change/input event. The picker itself is opened by the label/input
-  // default action, which is more reliable than a synthetic fileInput.click().
+  const now = Date.now();
+  // If the picker is already active (opened by an earlier genuine click), ignore
+  // this event — it may be a ghost click that iOS Safari fires on the label after
+  // the native picker closes, which would otherwise clear fileInput.value before
+  // the change event fires.  The 30-second timeout is a safety valve so a
+  // cancelled picker (no cancel/change event) doesn't block future opens.
+  if (pickerIsActive && now - pickerActivatedAt < PICKER_TIMEOUT_MS) return;
   state.fileInputKey = null;
   fileInput.value = '';
+  pickerIsActive = true;
+  pickerActivatedAt = now;
+}
+
+function onPickerClose() {
+  pickerIsActive = false;
 }
 
 async function handleFile(event) {
+  onPickerClose();
   const file = event.currentTarget.files?.[0];
   if (!file) return;
 
