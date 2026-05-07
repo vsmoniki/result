@@ -1,3 +1,5 @@
+import FitParser from 'fit-file-parser';
+
 const $ = (selector) => document.querySelector(selector);
 
 const state = { fitData: null, metrics: null, downloadUrl: null };
@@ -37,9 +39,7 @@ async function handleFile(event) {
 }
 
 
-async function parseFitBuffer(buffer) {
-  const fitParserModule = await import('fit-file-parser');
-  const FitParser = fitParserModule.default ?? fitParserModule.FitParser;
+function parseFitBuffer(buffer) {
   if (typeof FitParser !== 'function') {
     throw new Error('FITパーサーを読み込めませんでした。');
   }
