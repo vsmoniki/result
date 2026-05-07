@@ -16,11 +16,16 @@
         </section>
 
         <section class="panel controls">
-          <label class="file-drop" for="fitFile">
+          <div id="fileDrop" class="file-drop" role="button" tabindex="0" aria-controls="fitFile">
             <span>FITまたはCSVファイルを選択</span>
             <strong id="fileName">未選択</strong>
-            <input id="fitFile" type="file" accept=".fit,.csv,text/csv,application/octet-stream" />
-          </label>
+          </div>
+          <input
+            id="fitFile"
+            class="file-input"
+            type="file"
+            accept=".fit,.FIT,.csv,.CSV,text/csv,application/csv,application/vnd.ant.fit,application/octet-stream"
+          />
 
           <div class="mode-grid" role="tablist" aria-label="作成する画像タイプ">
             <label><input type="radio" name="mode" value="finish" checked /> 完走タイム</label>

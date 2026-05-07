@@ -94,11 +94,24 @@ h1 {
   white-space: nowrap;
 }
 
-.file-drop input {
+.file-drop:focus-visible {
+  outline: 3px solid #ffb21a;
+  outline-offset: 3px;
+}
+
+.file-drop.drag-over {
+  border-color: #ffb21a;
+  background: rgba(255, 178, 26, .14);
+}
+
+.file-input {
   position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .mode-grid {
