@@ -11,6 +11,8 @@ const state = {
   fileSelectionToken: 0,
   isLoadingFile: false,
 };
+const DEFAULT_CANVAS_WIDTH = 1920;
+const DEFAULT_CANVAS_HEIGHT = 1080;
 const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = $('#fitFile');
@@ -86,9 +88,16 @@ async function processSelectedFile(file) {
 
     state.sourceData = sourceData;
     state.metrics = metrics;
+    state.isLoadingFile = false;
+    $('#generate').disabled = false;
     fileDrop.classList.add('has-file');
-    setStatus(`${metrics.records.length.toLocaleString()}点の記録を読み込みました。画像を作成できます。`);
     $('#summary').textContent = `${formatDuration(metrics.duration)} / ${Math.round(metrics.avgPower)}W avg`;
+    if (canGenerateImage()) {
+      generateImage();
+      setStatus(`${metrics.records.length.toLocaleString()}点の記録を読み込み、プレビューへ反映しました。`);
+    } else {
+      setStatus(`${metrics.records.length.toLocaleString()}点の記録を読み込みました。必要項目を入力して画像を作成してください。`);
+    }
   } catch (error) {
     if (!isCurrentFileSelection(selectionToken)) return;
     resetSelectedFileState(false);
@@ -106,13 +115,14 @@ function beginFileSelection(file) {
   $('#fileName').textContent = file.name;
   clearGeneratedDownload();
   $('#generate').disabled = true;
+  drawPlaceholder();
   return selectionToken;
 }
 
 function finishFileSelection(selectionToken) {
   if (!isCurrentFileSelection(selectionToken)) return;
   state.isLoadingFile = false;
-  $('#generate').disabled = false;
+  $('#generate').disabled = !state.metrics;
 }
 
 function isCurrentFileSelection(selectionToken) {
@@ -410,13 +420,13 @@ function generateImage() {
   }
   if (getMode() === 'finish') {
     const weight = Number($('#weight').value);
-    if (!weight) return setStatus('体重を入力してください。', true);
+    if (!isValidPositiveNumber(weight)) return setStatus('体重を入力してください。', true);
     drawFinishResult(state.metrics, weight);
   } else {
     const title = $('#rideTitle').value.trim();
     const ftp = Number($('#ftp').value);
     const maxHrSetting = Number($('#maxHrSetting').value);
-    if (!title || !ftp || !maxHrSetting) return setStatus('タイトル、FTP、最大心拍数を入力してください。', true);
+    if (!title || !isValidPositiveNumber(ftp) || !isValidPositiveNumber(maxHrSetting)) return setStatus('タイトル、FTP、最大心拍数を入力してください。', true);
     drawRideReport(state.metrics, { title, ftp, maxHrSetting });
   }
   canvas.toBlob((blob) => {
@@ -458,6 +468,20 @@ async function savePng(event) {
     }
     setStatus(`PNGの保存を開始できませんでした: ${formatError(error)}`, true);
   }
+}
+
+function canGenerateImage() {
+  if (!state.metrics || state.isLoadingFile) return false;
+  if (getMode() === 'finish') return isValidPositiveNumber(Number($('#weight').value));
+  return Boolean(
+    $('#rideTitle').value.trim()
+      && isValidPositiveNumber(Number($('#ftp').value))
+      && isValidPositiveNumber(Number($('#maxHrSetting').value)),
+  );
+}
+
+function isValidPositiveNumber(value) {
+  return Number.isFinite(value) && value > 0;
 }
 
 function isSmartphoneDevice() {
@@ -581,6 +605,8 @@ function average(values) {
 }
 
 function drawPlaceholder() {
+  canvas.width = DEFAULT_CANVAS_WIDTH;
+  canvas.height = DEFAULT_CANVAS_HEIGHT;
   const w = canvas.width;
   const h = canvas.height;
   ctx.clearRect(0, 0, w, h);
