@@ -9,7 +9,7 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
-    "fit-file-parser": "latest",
+    "fit-file-parser": "2.3.3",
     "vite": "latest"
   }
 }

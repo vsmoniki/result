@@ -23,10 +23,8 @@ async function handleFile(event) {
   $('#fileName').textContent = file.name;
   setStatus('FITファイルを解析中…');
   try {
-    const { default: FitParser } = await import('fit-file-parser');
-    const parser = new FitParser({ force: true, mode: 'both', speedUnit: 'km/h', lengthUnit: 'km', elapsedRecordField: true });
     const buffer = await file.arrayBuffer();
-    state.fitData = await parser.parseAsync(buffer);
+    state.fitData = await parseFitBuffer(buffer);
     state.metrics = extractMetrics(state.fitData);
     setStatus(`${state.metrics.records.length.toLocaleString()}点の記録を読み込みました。画像を作成できます。`);
     $('#summary').textContent = `${formatDuration(state.metrics.duration)} / ${Math.round(state.metrics.avgPower)}W avg`;
@@ -34,8 +32,56 @@ async function handleFile(event) {
     state.fitData = null;
     state.metrics = null;
     $('#summary').textContent = '';
-    setStatus(`FITファイルを解析できませんでした: ${error.message}`, true);
+    setStatus(`FITファイルを解析できませんでした: ${formatError(error)}`, true);
   }
+}
+
+
+async function parseFitBuffer(buffer) {
+  const fitParserModule = await import('fit-file-parser');
+  const FitParser = fitParserModule.default ?? fitParserModule.FitParser;
+  if (typeof FitParser !== 'function') {
+    throw new Error('FITパーサーを読み込めませんでした。');
+  }
+
+  const parser = new FitParser({
+    force: true,
+    mode: 'both',
+    speedUnit: 'km/h',
+    lengthUnit: 'km',
+    elapsedRecordField: true,
+  });
+
+  return parseWithCallback(parser, buffer);
+}
+
+function parseWithCallback(parser, buffer) {
+  return new Promise((resolve, reject) => {
+    let parsedData;
+    let parseError;
+
+    try {
+      parser.parse(buffer, (error, data) => {
+        if (error) parseError = error;
+        if (data) parsedData = data;
+      });
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    if (parsedData) {
+      resolve(parsedData);
+    } else {
+      reject(parseError || new Error('FITデータが空でした。'));
+    }
+  });
+}
+
+function formatError(error) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return '不明なエラー';
 }
 
 function getMode() {
