@@ -2,7 +2,7 @@ import FitParser from 'fit-file-parser';
 
 const $ = (selector) => document.querySelector(selector);
 
-const state = { fitData: null, metrics: null, downloadUrl: null };
+const state = { sourceData: null, metrics: null, downloadUrl: null };
 const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 
@@ -23,21 +23,32 @@ async function handleFile(event) {
   const file = event.target.files?.[0];
   if (!file) return;
   $('#fileName').textContent = file.name;
-  setStatus('FITファイルを解析中…');
+  const fileType = getFileType(file);
+  setStatus(`${fileType.label}ファイルを解析中…`);
   try {
-    const buffer = await file.arrayBuffer();
-    state.fitData = await parseFitBuffer(buffer);
-    state.metrics = extractMetrics(state.fitData);
+    state.sourceData = await parseActivityFile(file, fileType);
+    state.metrics = extractMetrics(state.sourceData, fileType.label);
     setStatus(`${state.metrics.records.length.toLocaleString()}点の記録を読み込みました。画像を作成できます。`);
     $('#summary').textContent = `${formatDuration(state.metrics.duration)} / ${Math.round(state.metrics.avgPower)}W avg`;
   } catch (error) {
-    state.fitData = null;
+    state.sourceData = null;
     state.metrics = null;
     $('#summary').textContent = '';
-    setStatus(`FITファイルを解析できませんでした: ${formatError(error)}`, true);
+    setStatus(`${fileType.label}ファイルを解析できませんでした: ${formatError(error)}`, true);
   }
 }
 
+
+function getFileType(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.csv') || file.type === 'text/csv') return { label: 'CSV', type: 'csv' };
+  return { label: 'FIT', type: 'fit' };
+}
+
+async function parseActivityFile(file, fileType) {
+  if (fileType.type === 'csv') return parseCsvText(await file.text());
+  return parseFitBuffer(await file.arrayBuffer());
+}
 
 function parseFitBuffer(buffer) {
   if (typeof FitParser !== 'function') {
@@ -78,6 +89,155 @@ function parseWithCallback(parser, buffer) {
   });
 }
 
+
+function parseCsvText(text) {
+  const rows = parseCsvRows(text).filter((row) => row.some((cell) => cell.trim() !== ''));
+  if (rows.length < 2) throw new Error('CSVにヘッダー行とデータ行が必要です。');
+
+  const headers = rows[0].map(normalizeHeader);
+  const records = rows.slice(1).map((row, index) => csvRowToRecord(headers, row, index)).filter(Boolean);
+  if (!records.length) throw new Error('CSVに読み取り可能な時系列レコードがありません。');
+
+  const caloriesHeader = findHeader(headers, [['calories'], ['kcal'], ['calorie']]);
+  const calories = caloriesHeader
+    ? lastFinite(rows.slice(1).map((row) => parseNumber(row[caloriesHeader.index])))
+    : undefined;
+
+  return {
+    records,
+    sessions: Number.isFinite(calories) ? [{ total_calories: calories }] : [],
+  };
+}
+
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      row.push(cell);
+      cell = '';
+    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && next === '\n') i += 1;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = '';
+    } else {
+      cell += char;
+    }
+  }
+
+  row.push(cell);
+  rows.push(row);
+  return rows;
+}
+
+function csvRowToRecord(headers, row, index) {
+  const timestampInfo = findHeader(headers, [
+    ['timestamp'], ['time'], ['datetime'], ['date'], ['starttime'], ['recordedat'], ['localtime'], ['時間'], ['日時'], ['時刻'],
+  ]);
+  const elapsedInfo = findHeader(headers, [
+    ['elapsedtime'], ['elapsed'], ['duration'], ['seconds'], ['sec'], ['timeoffset'], ['経過時間'], ['経過秒'],
+  ]);
+
+  const elapsed = elapsedInfo ? parseDuration(row[elapsedInfo.index]) : undefined;
+  const timestamp = timestampInfo ? parseTimestamp(row[timestampInfo.index], elapsed, index) : undefined;
+  const fallbackTimestamp = Number.isFinite(elapsed) ? new Date(elapsed * 1000) : new Date(index * 1000);
+
+  const distance = readCsvMetric(headers, row, [['distance'], ['dist'], ['km'], ['距離']]);
+  const speed = readCsvMetric(headers, row, [['speed'], ['velocity'], ['kph'], ['kmh'], ['km/h'], ['速度']]);
+
+  return {
+    timestamp: timestamp || fallbackTimestamp,
+    elapsed: Number.isFinite(elapsed) ? elapsed : undefined,
+    power: readCsvNumber(headers, row, [['power'], ['watts'], ['watt'], ['w'], ['パワー']]),
+    heart_rate: readCsvNumber(headers, row, [['heartrate'], ['heart rate'], ['hr'], ['bpm'], ['心拍'], ['心拍数']]),
+    cadence: readCsvNumber(headers, row, [['cadence'], ['rpm'], ['ケイデンス']]),
+    distance: normalizeDistance(distance),
+    speed: normalizeSpeed(speed),
+  };
+}
+
+function normalizeHeader(header) {
+  return header.trim().toLowerCase().replace(/^\ufeff/, '').replace(/[\s_()\[\]{}.-]/g, '');
+}
+
+function findHeader(headers, candidates) {
+  const normalizedCandidates = candidates.map((candidate) => candidate.map(normalizeHeader));
+  for (const candidate of normalizedCandidates) {
+    const index = headers.findIndex((header) => candidate.some((term) => header === term || header.includes(term)));
+    if (index !== -1) return { index, header: headers[index] };
+  }
+  return undefined;
+}
+
+function readCsvNumber(headers, row, candidates) {
+  return readCsvMetric(headers, row, candidates)?.value;
+}
+
+function readCsvMetric(headers, row, candidates) {
+  const header = findHeader(headers, candidates);
+  if (!header) return undefined;
+  return { header: header.header, value: parseNumber(row[header.index]) };
+}
+
+function parseNumber(value) {
+  if (value == null) return undefined;
+  const normalized = String(value).trim().replace(/,/g, '');
+  if (!normalized) return undefined;
+  const match = normalized.match(/-?\d+(?:\.\d+)?/);
+  if (!match) return undefined;
+  const number = Number(match[0]);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function parseDuration(value) {
+  if (value == null) return undefined;
+  const normalized = String(value).trim();
+  if (!normalized) return undefined;
+  const timeParts = normalized.match(/^(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:\.\d+)?$/);
+  if (timeParts) {
+    const [, hours = '0', minutes, seconds] = timeParts;
+    return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
+  }
+  return parseNumber(normalized);
+}
+
+function parseTimestamp(value, elapsed, index) {
+  if (value == null || String(value).trim() === '') return undefined;
+  const date = new Date(value);
+  if (!Number.isNaN(date.getTime())) return date;
+  if (Number.isFinite(elapsed)) return new Date(elapsed * 1000);
+  const duration = parseDuration(value);
+  return Number.isFinite(duration) ? new Date(duration * 1000) : new Date(index * 1000);
+}
+
+function normalizeDistance(metric) {
+  if (!Number.isFinite(metric?.value)) return undefined;
+  return /(?:^|[^k])m$|meter|metre/.test(metric.header) ? metric.value / 1000 : metric.value;
+}
+
+function normalizeSpeed(metric) {
+  if (!Number.isFinite(metric?.value)) return undefined;
+  return /m\/s|meterpersecond|metrepersecond/.test(metric.header) ? metric.value * 3.6 : metric.value;
+}
+
+function lastFinite(values) {
+  return [...values].reverse().find(Number.isFinite);
+}
+
 function formatError(error) {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
@@ -90,7 +250,7 @@ function getMode() {
 
 function generateImage() {
   if (!state.metrics) {
-    setStatus('先にFITファイルを選択してください。', true);
+    setStatus('先にFITまたはCSVファイルを選択してください。', true);
     return;
   }
   if (getMode() === 'finish') {
@@ -120,12 +280,12 @@ function setStatus(message, isError = false) {
   $('#status').classList.toggle('error', isError);
 }
 
-function extractMetrics(data) {
+function extractMetrics(data, sourceLabel = 'FIT') {
   const records = (data.records || [])
     .filter((record) => record.timestamp)
     .map((record, index) => ({
       timestamp: new Date(record.timestamp),
-      elapsed: Number.isFinite(record.elapsed_time) ? record.elapsed_time : undefined,
+      elapsed: Number.isFinite(record.elapsed_time) ? record.elapsed_time : clean(record.elapsed),
       power: clean(record.power),
       heartRate: clean(record.heart_rate),
       cadence: clean(record.cadence),
@@ -135,7 +295,7 @@ function extractMetrics(data) {
     }))
     .sort((a, b) => a.timestamp - b.timestamp);
 
-  if (!records.length) throw new Error('FITに時系列レコードがありません。');
+  if (!records.length) throw new Error(`${sourceLabel}に時系列レコードがありません。`);
   const firstTime = records[0].timestamp.getTime();
   records.forEach((record) => {
     if (!Number.isFinite(record.elapsed)) record.elapsed = Math.max(0, (record.timestamp.getTime() - firstTime) / 1000);
