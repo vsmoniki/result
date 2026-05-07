@@ -1,55 +1,6 @@
-import FitParser from 'fit-file-parser';
 import './styles.css';
 
 const $ = (selector) => document.querySelector(selector);
-const app = $('#app');
-
-app.innerHTML = `
-  <main class="shell">
-    <section class="hero">
-      <p class="eyebrow">FITファイルからPNG生成</p>
-      <h1>Zwift風リザルト画像メーカー</h1>
-      <p>FITファイルをブラウザ内で解析し、完走タイム画面またはライドレポート画面を生成します。画像はサーバーへ送信されません。</p>
-    </section>
-
-    <section class="panel controls">
-      <label class="file-drop" for="fitFile">
-        <span>FITファイルを選択</span>
-        <strong id="fileName">未選択</strong>
-        <input id="fitFile" type="file" accept=".fit,application/octet-stream" />
-      </label>
-
-      <div class="mode-grid" role="tablist" aria-label="作成する画像タイプ">
-        <label><input type="radio" name="mode" value="finish" checked /> 完走タイム</label>
-        <label><input type="radio" name="mode" value="report" /> ライドレポート</label>
-      </div>
-
-      <div id="finishInputs" class="form-grid">
-        <label>体重（kg）<input id="weight" type="number" min="20" step="0.1" value="60" /></label>
-      </div>
-
-      <div id="reportInputs" class="form-grid hidden">
-        <label>ライドタイトル<input id="rideTitle" type="text" value="WTRL Team Time Trial - Zone 11 (FRAPPE)" /></label>
-        <label>FTP（W）<input id="ftp" type="number" min="1" step="1" value="250" /></label>
-        <label>最大心拍数（bpm）<input id="maxHrSetting" type="number" min="80" step="1" value="186" /></label>
-      </div>
-
-      <div class="actions">
-        <button id="generate" type="button">画像を作成</button>
-        <a id="download" class="download disabled" download="zwift-result.png">PNGを保存</a>
-      </div>
-      <p id="status" class="status">FITファイルを選択してください。</p>
-    </section>
-
-    <section class="panel preview-panel">
-      <div class="preview-toolbar">
-        <h2>プレビュー</h2>
-        <span id="summary"></span>
-      </div>
-      <canvas id="canvas" width="1920" height="1080" aria-label="生成画像プレビュー"></canvas>
-    </section>
-  </main>
-`;
 
 const state = { fitData: null, metrics: null, downloadUrl: null };
 const canvas = $('#canvas');
@@ -74,6 +25,7 @@ async function handleFile(event) {
   $('#fileName').textContent = file.name;
   setStatus('FITファイルを解析中…');
   try {
+    const { default: FitParser } = await import('fit-file-parser');
     const parser = new FitParser({ force: true, mode: 'both', speedUnit: 'km/h', lengthUnit: 'km', elapsedRecordField: true });
     const buffer = await file.arrayBuffer();
     state.fitData = await parser.parseAsync(buffer);
