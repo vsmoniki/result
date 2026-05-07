@@ -2,7 +2,15 @@ import FitParser from 'fit-file-parser';
 
 const $ = (selector) => document.querySelector(selector);
 
-const state = { sourceData: null, metrics: null, downloadUrl: null, downloadBlob: null, downloadFileName: 'zwift-result.png' };
+const state = {
+  sourceData: null,
+  metrics: null,
+  downloadUrl: null,
+  downloadBlob: null,
+  downloadFileName: 'zwift-result.png',
+  fileSelectionToken: 0,
+  isLoadingFile: false,
+};
 const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = $('#fitFile');
@@ -21,7 +29,7 @@ function syncMode() {
   const mode = getMode();
   $('#finishInputs').classList.toggle('hidden', mode !== 'finish');
   $('#reportInputs').classList.toggle('hidden', mode !== 'report');
-  $('#download').classList.add('disabled');
+  clearGeneratedDownload();
   drawPlaceholder();
 }
 
@@ -58,16 +66,10 @@ async function handleFileDrop(event) {
 }
 
 async function processSelectedFile(file) {
-  resetSelectedFileState();
-  $('#fileName').textContent = file.name;
-  $('#download').classList.add('disabled');
-  if (state.downloadUrl) {
-    URL.revokeObjectURL(state.downloadUrl);
-    state.downloadUrl = null;
-    state.downloadBlob = null;
-  }
+  const selectionToken = beginFileSelection(file);
 
   if (!isSupportedActivityFile(file)) {
+    finishFileSelection(selectionToken);
     setStatus('FITまたはCSVファイルを選択してください。', true);
     return;
   }
@@ -75,15 +77,43 @@ async function processSelectedFile(file) {
   const fileType = getFileType(file);
   setStatus(`${fileType.label}ファイルを読み込み中…`);
   try {
-    state.sourceData = await parseActivityFile(file, fileType);
-    state.metrics = extractMetrics(state.sourceData, fileType.label);
+    const sourceData = await parseActivityFile(file, fileType);
+    const metrics = extractMetrics(sourceData, fileType.label);
+    if (!isCurrentFileSelection(selectionToken)) return;
+
+    state.sourceData = sourceData;
+    state.metrics = metrics;
     fileDrop.classList.add('has-file');
-    setStatus(`${state.metrics.records.length.toLocaleString()}点の記録を読み込みました。画像を作成できます。`);
-    $('#summary').textContent = `${formatDuration(state.metrics.duration)} / ${Math.round(state.metrics.avgPower)}W avg`;
+    setStatus(`${metrics.records.length.toLocaleString()}点の記録を読み込みました。画像を作成できます。`);
+    $('#summary').textContent = `${formatDuration(metrics.duration)} / ${Math.round(metrics.avgPower)}W avg`;
   } catch (error) {
+    if (!isCurrentFileSelection(selectionToken)) return;
     resetSelectedFileState(false);
     setStatus(`${fileType.label}ファイルを読み込めませんでした: ${formatError(error)}`, true);
+  } finally {
+    finishFileSelection(selectionToken);
   }
+}
+
+function beginFileSelection(file) {
+  const selectionToken = state.fileSelectionToken + 1;
+  state.fileSelectionToken = selectionToken;
+  state.isLoadingFile = true;
+  resetSelectedFileState();
+  $('#fileName').textContent = file.name;
+  clearGeneratedDownload();
+  $('#generate').disabled = true;
+  return selectionToken;
+}
+
+function finishFileSelection(selectionToken) {
+  if (!isCurrentFileSelection(selectionToken)) return;
+  state.isLoadingFile = false;
+  $('#generate').disabled = false;
+}
+
+function isCurrentFileSelection(selectionToken) {
+  return selectionToken === state.fileSelectionToken;
 }
 
 function resetSelectedFileState(resetFileName = true) {
@@ -92,6 +122,17 @@ function resetSelectedFileState(resetFileName = true) {
   $('#summary').textContent = '';
   fileDrop.classList.remove('has-file');
   if (resetFileName) $('#fileName').textContent = '未選択';
+}
+
+function clearGeneratedDownload() {
+  const download = $('#download');
+  download.classList.add('disabled');
+  download.removeAttribute('href');
+  if (state.downloadUrl) {
+    URL.revokeObjectURL(state.downloadUrl);
+  }
+  state.downloadUrl = null;
+  state.downloadBlob = null;
 }
 
 
@@ -143,6 +184,8 @@ function parseFitBuffer(buffer) {
     lengthUnit: 'km',
     elapsedRecordField: true,
   });
+
+  if (typeof parser.parseAsync === 'function') return parser.parseAsync(buffer);
 
   return parseWithCallback(parser, buffer);
 }
@@ -354,6 +397,10 @@ function getMode() {
 }
 
 function generateImage() {
+  if (state.isLoadingFile) {
+    setStatus('ファイルを読み込み中です。完了してから画像を作成してください。', true);
+    return;
+  }
   if (!state.metrics) {
     setStatus('先にFITまたはCSVファイルを選択してください。', true);
     return;
