@@ -79,7 +79,7 @@ async function processSelectedFile(file) {
     state.metrics = extractMetrics(state.sourceData, fileType.label);
     fileDrop.classList.add('has-file');
     setStatus(`${state.metrics.records.length.toLocaleString()}点の記録を読み込みました。画像を作成できます。`);
-    $('#summary').textContent = formatMetricsSummary(state.metrics);
+    $('#summary').textContent = `${formatDuration(state.metrics.duration)} / ${Math.round(state.metrics.avgPower)}W avg`;
   } catch (error) {
     resetSelectedFileState(false);
     setStatus(`${fileType.label}ファイルを読み込めませんでした: ${formatError(error)}`, true);
@@ -243,14 +243,11 @@ function csvRowToRecord(headers, row, index) {
   return {
     timestamp: timestamp || fallbackTimestamp,
     elapsed: Number.isFinite(elapsed) ? elapsed : undefined,
-    power: readCsvNumber(headers, row, [['power'], ['watts'], ['watt'], ['w'], ['パワー']]),
+    power: readCsvNumber(headers, row, [['power'], ['watts'], ['watt'], ['w'], ['パワー'], ['ワット']]),
     heart_rate: readCsvNumber(headers, row, [['heartrate'], ['heart rate'], ['hr'], ['bpm'], ['心拍'], ['心拍数']]),
     cadence: readCsvNumber(headers, row, [['cadence'], ['rpm'], ['ケイデンス']]),
     distance: normalizeDistance(distance),
     speed: normalizeSpeed(speed),
-    watts_per_kg: readCsvNumber(headers, row, [
-      ['w/kg'], ['wkg'], ['wattsperkg'], ['wattperkg'], ['watts/kg'], ['watt/kg'], ['powerweight'], ['power/kg'], ['パワーウェイトレシオ'],
-    ]),
   };
 }
 
@@ -399,17 +396,9 @@ function setStatus(message, isError = false) {
   $('#status').classList.toggle('error', isError);
 }
 
-function formatMetricsSummary(metrics) {
-  const averageText = metrics.avgPower > 0
-    ? `${Math.round(metrics.avgPower)}W avg`
-    : `${metrics.avgWattsPerKg.toFixed(1)}W/kg avg`;
-  return `${formatDuration(metrics.duration)} / ${averageText}`;
-}
-
-function formatBestWattsPerKg(metrics, seconds, weight) {
-  const directWattsPerKg = metrics.bestWattsPerKg?.[seconds];
-  if (directWattsPerKg > 0) return directWattsPerKg.toFixed(1);
-  return (metrics.bestPower[seconds] / weight).toFixed(1);
+function calculateWattsPerKg(power, weight) {
+  if (!Number.isFinite(power) || !Number.isFinite(weight) || weight <= 0) return 0;
+  return power / weight;
 }
 
 function extractMetrics(data, sourceLabel = 'FIT') {
@@ -423,7 +412,6 @@ function extractMetrics(data, sourceLabel = 'FIT') {
       cadence: clean(record.cadence),
       distance: clean(record.distance),
       speed: clean(record.speed),
-      wattsPerKg: clean(record.watts_per_kg ?? record.wattsPerKg),
       index,
     }))
     .sort((a, b) => a.timestamp - b.timestamp);
@@ -434,14 +422,12 @@ function extractMetrics(data, sourceLabel = 'FIT') {
     if (!Number.isFinite(record.elapsed)) record.elapsed = Math.max(0, (record.timestamp.getTime() - firstTime) / 1000);
   });
 
-  const powers = records.map((r) => r.power ?? 0);
-  const wattsPerKgValues = records.map((r) => r.wattsPerKg).filter(Number.isFinite);
+  const powers = records.map((r) => r.power).filter(Number.isFinite);
   const heartRates = records.map((r) => r.heartRate).filter(Number.isFinite);
   const duration = Math.max(...records.map((r) => r.elapsed));
   const lastDistance = [...records].reverse().find((r) => Number.isFinite(r.distance))?.distance ?? 0;
   const avgPower = average(powers);
-  const avgWattsPerKg = wattsPerKgValues.length ? average(wattsPerKgValues) : 0;
-  const maxPower = Math.max(...powers);
+  const maxPower = powers.length ? Math.max(...powers) : 0;
   const maxHeartRate = heartRates.length ? Math.max(...heartRates) : 0;
   const avgHeartRate = heartRates.length ? average(heartRates) : 0;
   const calories = data.sessions?.[0]?.total_calories ?? Math.round(avgPower * duration / 1000 * 0.96);
@@ -451,7 +437,6 @@ function extractMetrics(data, sourceLabel = 'FIT') {
     duration,
     distanceKm: lastDistance,
     avgPower,
-    avgWattsPerKg,
     maxPower,
     maxHeartRate,
     avgHeartRate,
@@ -461,12 +446,6 @@ function extractMetrics(data, sourceLabel = 'FIT') {
       300: bestRollingAverage(records, 300),
       60: bestRollingAverage(records, 60),
       15: bestRollingAverage(records, 15),
-    },
-    bestWattsPerKg: {
-      1200: bestRollingAverage(records, 1200, 'wattsPerKg'),
-      300: bestRollingAverage(records, 300, 'wattsPerKg'),
-      60: bestRollingAverage(records, 60, 'wattsPerKg'),
-      15: bestRollingAverage(records, 15, 'wattsPerKg'),
     },
   };
 }
@@ -496,6 +475,9 @@ function bestRollingAverage(records, seconds, field = 'power') {
     }
     const span = Math.max(1, records[right].elapsed - records[left].elapsed + 1);
     if (span >= seconds * 0.9 && validCount) best = Math.max(best, sum / validCount);
+  }
+  if (best === 0) {
+    return average(records.map((record) => record[field]));
   }
   return best;
 }
@@ -554,7 +536,7 @@ function drawFinishResult(metrics, weight) {
   labels.forEach(([label, seconds], index) => {
     const x = 95 + index * 90;
     ctx.font = '400 36px system-ui, sans-serif';
-    ctx.fillText(formatBestWattsPerKg(metrics, seconds, weight), x, 384);
+    ctx.fillText(calculateWattsPerKg(metrics.bestPower[seconds], weight).toFixed(1), x, 384);
     ctx.font = '400 15px system-ui, sans-serif';
     ctx.fillText(label, x, 420);
   });
