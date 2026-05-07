@@ -50,14 +50,23 @@ function syncMode() {
   drawPlaceholder();
 }
 
-function prepareFilePicker() {
+function prepareFilePicker(event) {
   const now = Date.now();
   // If the picker is already active (opened by an earlier genuine click), ignore
   // this event — it may be a ghost click that iOS Safari fires on the label after
   // the native picker closes, which would otherwise clear fileInput.value before
   // the change event fires.  The 30-second timeout is a safety valve so a
   // cancelled picker (no cancel/change event) doesn't block future opens.
-  if (pickerIsActive && now - pickerActivatedAt < PICKER_TIMEOUT_MS) return;
+  if (pickerIsActive && now - pickerActivatedAt < PICKER_TIMEOUT_MS) {
+    // Suppress label activation for clicks that originated on the label itself
+    // (ghost clicks). Don't suppress clicks that bubbled up FROM fileInput,
+    // because those are the browser's own synthetic activation click that
+    // actually opens the picker for legitimate user interactions.
+    if (event.currentTarget === fileDrop && event.target !== fileInput) {
+      event.preventDefault();
+    }
+    return;
+  }
   state.fileInputKey = null;
   fileInput.value = '';
   pickerIsActive = true;
@@ -69,7 +78,6 @@ function onPickerClose() {
 }
 
 async function handleFile(event) {
-  onPickerClose();
   const file = event.currentTarget.files?.[0];
   if (!file) return;
 
