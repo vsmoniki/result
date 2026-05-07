@@ -636,18 +636,46 @@ function drawRideReport(metrics, options) {
   drawDistributionPanels(metrics, options);
 }
 
-function drawHeader(metrics, { title }) {
+function calculateNormalizedPower(records) {
+  const windowSeconds = 30;
+  const rollingAvgs = [];
+  for (let right = 0; right < records.length; right++) {
+    const rightElapsed = records[right].elapsed;
+    let sum = 0;
+    let count = 0;
+    for (let left = right; left >= 0; left--) {
+      if (rightElapsed - records[left].elapsed > windowSeconds) break;
+      const p = records[left].power;
+      if (Number.isFinite(p)) { sum += p; count++; }
+    }
+    if (count > 0) rollingAvgs.push(sum / count);
+  }
+  if (!rollingAvgs.length) return 0;
+  const avgFourthPower = rollingAvgs.reduce((s, v) => s + v ** 4, 0) / rollingAvgs.length;
+  return avgFourthPower ** 0.25;
+}
+
+function calculateTSS(durationSeconds, normalizedPower, ftp) {
+  if (!ftp || ftp <= 0 || normalizedPower <= 0) return 0;
+  const intensityFactor = normalizedPower / ftp;
+  return Math.round((durationSeconds * normalizedPower * intensityFactor) / (ftp * 3600) * 100);
+}
+
+function drawHeader(metrics, { title, ftp }) {
   ctx.fillStyle = '#27272b';
   ctx.textAlign = 'left';
   ctx.font = reportFont(27, 950, REPORT_NUMBER_FONT);
   ctx.fillText(title, 27, 72);
+
+  const np = calculateNormalizedPower(metrics.records);
+  const tss = calculateTSS(metrics.duration, np, ftp);
 
   const stats = [
     { icon: 'bolt', value: Math.round(metrics.avgPower), unit: 'AVG', x: 37, maxWidth: 178 },
     { icon: 'route', value: metrics.distanceKm.toFixed(1), unit: 'km', x: 240, maxWidth: 155 },
     { icon: 'clock', value: formatReportDuration(metrics.duration), unit: 'ET', x: 414, maxWidth: 150 },
     { icon: null, value: Math.round(metrics.calories), unit: 'KCAL', x: 610, maxWidth: 155 },
-    { icon: null, value: '86', unit: 'SP', x: 817, maxWidth: 92 },
+    { icon: null, value: tss, unit: 'SP', x: 817, maxWidth: 92 },
   ];
   stats.forEach((stat) => drawHeaderStat(stat));
 
