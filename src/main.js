@@ -258,10 +258,10 @@ function generateImage() {
     if (!weight) return setStatus('体重を入力してください。', true);
     drawFinishResult(state.metrics, weight);
   } else {
-    const title = $('#rideTitle').value.trim() || 'Zwift Ride';
+    const title = $('#rideTitle').value.trim();
     const ftp = Number($('#ftp').value);
     const maxHrSetting = Number($('#maxHrSetting').value);
-    if (!ftp || !maxHrSetting) return setStatus('タイトル、FTP、最大心拍数を入力してください。', true);
+    if (!title || !ftp || !maxHrSetting) return setStatus('タイトル、FTP、最大心拍数を入力してください。', true);
     drawRideReport(state.metrics, { title, ftp, maxHrSetting });
   }
   canvas.toBlob((blob) => {
