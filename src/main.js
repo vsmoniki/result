@@ -491,10 +491,15 @@ function extractMetrics(data, sourceLabel = 'FIT') {
   const maxHeartRate = heartRates.length ? Math.max(...heartRates) : 0;
   const avgHeartRate = heartRates.length ? average(heartRates) : 0;
   const calories = data.sessions?.[0]?.total_calories ?? Math.round(avgPower * duration / 1000 * 0.96);
+  const sessionTimerTime = data.sessions?.[0]?.total_timer_time;
+  const timerSeconds = (Number.isFinite(sessionTimerTime) && sessionTimerTime > 0)
+    ? sessionTimerTime
+    : duration;
 
   return {
     records,
     duration,
+    timerSeconds,
     distanceKm: lastDistance,
     avgPower,
     maxPower,
@@ -637,23 +642,36 @@ function drawRideReport(metrics, options) {
 }
 
 function calculateNormalizedPower(records) {
+  if (!records.length) return 0;
+
   const windowSeconds = 30;
-  const rollingAvgs = [];
-  for (let right = 0; right < records.length; right++) {
-    const rightElapsed = records[right].elapsed;
-    let sum = 0;
-    let count = 0;
-    for (let left = right; left >= 0; left--) {
-      if (rightElapsed - records[left].elapsed > windowSeconds) break;
-      const p = records[left].power;
-      sum += Number.isFinite(p) ? p : 0;
-      count++;
+  // Fill smart-recording gaps (≤ 8 s) to get 1-second resolution;
+  // larger gaps are auto-pause breaks and are left as-is.
+  const maxFillGap = 8;
+  const powerSec = [];
+  for (let i = 0; i < records.length; i++) {
+    const p = Number.isFinite(records[i].power) ? records[i].power : 0;
+    if (i > 0) {
+      const gap = Math.round(records[i].elapsed - records[i - 1].elapsed);
+      if (gap > 1 && gap <= maxFillGap) {
+        const prevP = Number.isFinite(records[i - 1].power) ? records[i - 1].power : 0;
+        for (let s = 1; s < gap; s++) powerSec.push(prevP);
+      }
     }
-    if (count > 0) rollingAvgs.push(sum / count);
+    powerSec.push(p);
   }
-  if (!rollingAvgs.length) return 0;
-  const avgFourthPower = rollingAvgs.reduce((s, v) => s + v ** 4, 0) / rollingAvgs.length;
-  return avgFourthPower ** 0.25;
+
+  // 30-second rolling average using a sliding window
+  let windowSum = 0;
+  let fourthPowerSum = 0;
+  for (let i = 0; i < powerSec.length; i++) {
+    windowSum += powerSec[i];
+    if (i >= windowSeconds) windowSum -= powerSec[i - windowSeconds];
+    const avg = windowSum / Math.min(i + 1, windowSeconds);
+    fourthPowerSum += avg ** 4;
+  }
+
+  return (fourthPowerSum / powerSec.length) ** 0.25;
 }
 
 function calculateTSS(durationSeconds, normalizedPower, ftp) {
@@ -669,7 +687,7 @@ function drawHeader(metrics, { title, ftp }) {
   ctx.fillText(title, 27, 72);
 
   const np = calculateNormalizedPower(metrics.records);
-  const tss = calculateTSS(metrics.duration, np, ftp);
+  const tss = calculateTSS(metrics.timerSeconds, np, ftp);
 
   const stats = [
     { icon: 'bolt', value: Math.round(metrics.avgPower), unit: 'AVG', x: 37, maxWidth: 178 },
