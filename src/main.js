@@ -824,7 +824,8 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   // Scale smoothing window with data density to prevent color bleeding on long rides
   const adaptiveWindow = Math.max(3, Math.ceil(metrics.records.length / maxSamples));
   const powers = downsampleSeries(rollingPower(metrics.records, adaptiveWindow), maxSamples);
-  const maxGraphPower = Math.max(ftp * 1.45, metrics.maxPower, 1);
+  const maxDisplayedPower = powers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
+  const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
 
   // Power bars with exact width (no overlap) to prevent color bleed
   const barW = width / Math.max(1, powers.length);
