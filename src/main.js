@@ -12,6 +12,7 @@ const state = {
   fileSelectionToken: 0,
   fileInputKey: null,
   autoRideTitle: '',
+  autoSp: 0,
   isLoadingFile: false,
 };
 
@@ -49,6 +50,7 @@ window.addEventListener('focus', () => {
 $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
+$('#ftp').addEventListener('input', syncSp);
 
 function syncMode() {
   const mode = getMode();
@@ -141,6 +143,7 @@ async function processSelectedFile(file) {
     state.metrics = metrics;
     state.isLoadingFile = false;
     syncRideTitle(sourceData, file);
+    syncSp();
     $('#generate').disabled = false;
     fileDrop.classList.add('has-file');
     $('#summary').textContent = `${formatDuration(metrics.duration)} / ${Math.round(metrics.avgPower)}W avg`;
@@ -193,6 +196,19 @@ function handleRideTitleInput(event) {
   if (event.currentTarget.value !== state.autoRideTitle) {
     state.autoRideTitle = '';
   }
+}
+
+function syncSp() {
+  if (!state.metrics) return;
+  const ftp = Number($('#ftp').value);
+  if (!isValidPositiveNumber(ftp)) return;
+  const spInput = $('#spInput');
+  const currentValue = spInput.value;
+  if (currentValue !== '' && Number(currentValue) !== state.autoSp) return;
+  const np = calculateNormalizedPower(state.metrics.records);
+  const sp = calculateStressPoints(state.metrics.timerSeconds, np, ftp);
+  state.autoSp = sp;
+  spInput.value = sp;
 }
 
 function syncRideTitle(data, file) {
@@ -386,7 +402,8 @@ function generateImage() {
     const ftp = Number($('#ftp').value);
     const maxHrSetting = Number($('#maxHrSetting').value);
     if (!title || !isValidPositiveNumber(ftp) || !isValidPositiveNumber(maxHrSetting)) return setStatus('タイトル、FTP、最大心拍数を入力してください。', true);
-    drawRideReport(state.metrics, { title, ftp, maxHrSetting });
+    const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
+    drawRideReport(state.metrics, { title, ftp, maxHrSetting, sp });
   }
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -643,21 +660,18 @@ function drawRideReport(metrics, options) {
 }
 
 
-function drawHeader(metrics, { title, ftp }) {
+function drawHeader(metrics, { title, sp }) {
   ctx.fillStyle = '#27272b';
   ctx.textAlign = 'left';
   ctx.font = reportFont(27, 950, REPORT_NUMBER_FONT);
   ctx.fillText(title, 27, 72);
-
-  const np = calculateNormalizedPower(metrics.records);
-  const stressPoints = calculateStressPoints(metrics.timerSeconds, np, ftp);
 
   const stats = [
     { icon: 'bolt', value: Math.round(metrics.avgPower), unit: 'AVG', x: 37, maxWidth: 178 },
     { icon: 'route', value: metrics.distanceKm.toFixed(1), unit: 'km', x: 240, maxWidth: 155 },
     { icon: 'clock', value: formatReportDuration(metrics.duration), unit: 'ET', x: 414, maxWidth: 150 },
     { icon: null, value: Math.round(metrics.calories), unit: 'KCAL', x: 610, maxWidth: 155 },
-    { icon: null, value: stressPoints, unit: 'SP', x: 817, maxWidth: 92 },
+    { icon: null, value: sp, unit: 'SP', x: 817, maxWidth: 92 },
   ];
   drawLevelProgress();
   drawAvatar();
