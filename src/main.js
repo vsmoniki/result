@@ -1,4 +1,5 @@
 import FitParser from 'fit-file-parser';
+import { calculateNormalizedPower, calculateStressPoints } from './sp.js';
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -641,45 +642,6 @@ function drawRideReport(metrics, options) {
   drawDistributionPanels(metrics, options);
 }
 
-function calculateNormalizedPower(records) {
-  if (!records.length) return 0;
-
-  const windowSeconds = 30;
-  // Fill smart-recording gaps (≤ 30 s) to get 1-second resolution;
-  // Garmin smart-recording can use up to ~30 s intervals; larger gaps
-  // are auto-pause breaks and are left as-is.
-  const maxFillGap = 30;
-  const powerSec = [];
-  for (let i = 0; i < records.length; i++) {
-    const p = Number.isFinite(records[i].power) ? records[i].power : 0;
-    if (i > 0) {
-      const gap = Math.round(records[i].elapsed - records[i - 1].elapsed);
-      if (gap > 1 && gap <= maxFillGap) {
-        const prevP = Number.isFinite(records[i - 1].power) ? records[i - 1].power : 0;
-        for (let s = 1; s < gap; s++) powerSec.push(prevP);
-      }
-    }
-    powerSec.push(p);
-  }
-
-  // 30-second rolling average using a sliding window
-  let windowSum = 0;
-  let fourthPowerSum = 0;
-  for (let i = 0; i < powerSec.length; i++) {
-    windowSum += powerSec[i];
-    if (i >= windowSeconds) windowSum -= powerSec[i - windowSeconds];
-    const avg = windowSum / Math.min(i + 1, windowSeconds);
-    fourthPowerSum += avg ** 4;
-  }
-
-  return (fourthPowerSum / powerSec.length) ** 0.25;
-}
-
-function calculateTSS(durationSeconds, normalizedPower, ftp) {
-  if (!ftp || ftp <= 0 || normalizedPower <= 0) return 0;
-  const intensityFactor = normalizedPower / ftp;
-  return Math.round((durationSeconds * normalizedPower * intensityFactor) / (ftp * 3600) * 100);
-}
 
 function drawHeader(metrics, { title, ftp }) {
   ctx.fillStyle = '#27272b';
@@ -688,14 +650,14 @@ function drawHeader(metrics, { title, ftp }) {
   ctx.fillText(title, 27, 72);
 
   const np = calculateNormalizedPower(metrics.records);
-  const tss = calculateTSS(metrics.timerSeconds, np, ftp);
+  const stressPoints = calculateStressPoints(metrics.timerSeconds, np, ftp);
 
   const stats = [
     { icon: 'bolt', value: Math.round(metrics.avgPower), unit: 'AVG', x: 37, maxWidth: 178 },
     { icon: 'route', value: metrics.distanceKm.toFixed(1), unit: 'km', x: 240, maxWidth: 155 },
     { icon: 'clock', value: formatReportDuration(metrics.duration), unit: 'ET', x: 414, maxWidth: 150 },
     { icon: null, value: Math.round(metrics.calories), unit: 'KCAL', x: 610, maxWidth: 155 },
-    { icon: null, value: tss, unit: 'SP', x: 817, maxWidth: 92 },
+    { icon: null, value: stressPoints, unit: 'SP', x: 817, maxWidth: 92 },
   ];
   drawLevelProgress();
   drawAvatar();
