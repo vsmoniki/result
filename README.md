@@ -37,7 +37,5 @@ npm run build
 GitHub Pages 用の自動デプロイ設定を同梱しています。
 
 1. GitHubリポジトリの **Settings > Pages** で Source を **GitHub Actions** に設定します。
-2. `main` / `master` / `work` ブランチへマージまたはプッシュすると、`.github/workflows/deploy.yml` が `npm ci` と `npm run build` を実行し、`dist/` をGitHub Pagesへ公開します。
+2. `main` ブランチへマージまたはプッシュすると、自動的にビルド・公開されます。
 3. 手動で再デプロイしたい場合は、GitHub Actions の **Deploy to GitHub Pages** ワークフローから **Run workflow** を実行します。
-
-Viteの `base` は `./` に設定しているため、GitHub Pages のサブパス配信でもアセットを読み込めます。
