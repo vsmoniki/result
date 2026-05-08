@@ -12,7 +12,6 @@ const state = {
   fileSelectionToken: 0,
   fileInputKey: null,
   autoRideTitle: '',
-  autoSp: 0,
   isLoadingFile: false,
 };
 
@@ -202,13 +201,9 @@ function syncSp() {
   if (!state.metrics) return;
   const ftp = Number($('#ftp').value);
   if (!isValidPositiveNumber(ftp)) return;
-  const spInput = $('#spInput');
-  const currentValue = spInput.value;
-  if (currentValue !== '' && Number(currentValue) !== state.autoSp) return;
   const np = calculateNormalizedPower(state.metrics.records);
   const sp = calculateStressPoints(state.metrics.timerSeconds, np, ftp);
-  state.autoSp = sp;
-  spInput.value = sp;
+  $('#spInput').value = sp;
 }
 
 function syncRideTitle(data, file) {
