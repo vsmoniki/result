@@ -858,23 +858,66 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   ctx.roundRect(x, y, width, height, 10);
   ctx.clip();
   const maxSamples = width;
-  const powers = downsampleSeries(rollingPower(metrics.records, 3), maxSamples);
-  const powerLine = downsampleSeries(rollingPower(metrics.records, 5), maxSamples);
+
+  // Scale smoothing window with data density to prevent color bleeding on long rides
+  const adaptiveWindow = Math.max(3, Math.ceil(metrics.records.length / maxSamples));
+  const powers = downsampleSeries(rollingPower(metrics.records, adaptiveWindow), maxSamples);
+  const powerLine = downsampleSeries(rollingPower(metrics.records, adaptiveWindow * 2), maxSamples);
   const maxGraphPower = Math.max(ftp * 1.45, metrics.maxPower, 1);
+
+  // Vertical time grid lines
+  const timeInterval = getTimeAxisInterval(metrics.duration);
+  const timeCount = Math.floor(metrics.duration / timeInterval);
+  ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i <= timeCount; i++) {
+    const lx = x + (i * timeInterval / metrics.duration) * width;
+    ctx.beginPath();
+    ctx.moveTo(lx, y);
+    ctx.lineTo(lx, y + height);
+    ctx.stroke();
+  }
+
+  // Power bars with exact width (no overlap) to prevent color bleed
+  const barW = width / Math.max(1, powers.length);
   powers.forEach((p, index) => {
-    const px = x + (index / Math.max(1, powers.length - 1)) * width;
-    const barW = Math.max(1, width / powers.length + 0.25);
     const barH = Math.min(height - 5, (p / maxGraphPower) * (height - 58));
     ctx.fillStyle = zoneColor(p, ftp);
-    ctx.globalAlpha = 0.82;
-    ctx.fillRect(px, y + height - barH, barW, barH);
+    ctx.globalAlpha = 0.78;
+    ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
+
+  // FTP reference line
+  const ftpLineY = Math.round(y + height - (ftp / maxGraphPower) * (height - 58));
+  ctx.strokeStyle = 'rgba(255,178,26,0.65)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(x, ftpLineY);
+  ctx.lineTo(x + width, ftpLineY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,178,26,0.9)';
+  ctx.font = reportFont(10);
+  ctx.textAlign = 'left';
+  ctx.fillText(`FTP ${ftp}w`, x + 5, ftpLineY - 3);
+
   drawPowerLine(powerLine, x, y, width, height, maxGraphPower);
-  const hrs = downsampleSeries(rollingHeartRate(metrics.records, 5), maxSamples);
+  const hrs = downsampleSeries(rollingHeartRate(metrics.records, adaptiveWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
   drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
+
+  // Time axis labels at bottom
+  ctx.fillStyle = 'rgba(255,255,255,0.48)';
+  ctx.font = reportFont(10);
+  ctx.textAlign = 'center';
+  for (let i = 1; i <= timeCount; i++) {
+    const lx = x + (i * timeInterval / metrics.duration) * width;
+    ctx.fillText(formatDurationShort(i * timeInterval), lx, y + height - 5);
+  }
+
   ctx.restore();
 
   const maxPowerIndex = powers.reduce((best, value, index) => value > powers[best] ? index : best, 0);
@@ -1194,6 +1237,21 @@ function zoneColor(power, ftp) {
   if (ratio < 1.05) return '#c4a927';
   if (ratio < 1.2) return '#d95f21';
   return '#bf2b20';
+}
+
+function getTimeAxisInterval(seconds) {
+  if (seconds <= 1800) return 300;
+  if (seconds <= 5400) return 600;
+  if (seconds <= 10800) return 1800;
+  return 3600;
+}
+
+function formatDurationShort(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h && m) return `${h}:${String(m).padStart(2, '0')}`;
+  if (h) return `${h}h`;
+  return `${m}m`;
 }
 
 function formatDuration(seconds) {
