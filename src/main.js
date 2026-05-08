@@ -645,9 +645,10 @@ function calculateNormalizedPower(records) {
   if (!records.length) return 0;
 
   const windowSeconds = 30;
-  // Fill smart-recording gaps (≤ 8 s) to get 1-second resolution;
-  // larger gaps are auto-pause breaks and are left as-is.
-  const maxFillGap = 8;
+  // Fill smart-recording gaps (≤ 30 s) to get 1-second resolution;
+  // Garmin smart-recording can use up to ~30 s intervals; larger gaps
+  // are auto-pause breaks and are left as-is.
+  const maxFillGap = 30;
   const powerSec = [];
   for (let i = 0; i < records.length; i++) {
     const p = Number.isFinite(records[i].power) ? records[i].power : 0;
