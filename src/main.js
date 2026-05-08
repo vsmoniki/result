@@ -824,7 +824,6 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   // Scale smoothing window with data density to prevent color bleeding on long rides
   const adaptiveWindow = Math.max(3, Math.ceil(metrics.records.length / maxSamples));
   const powers = downsampleSeries(rollingPower(metrics.records, adaptiveWindow), maxSamples);
-  const powerLine = downsampleSeries(rollingPower(metrics.records, adaptiveWindow * 2), maxSamples);
   const maxGraphPower = Math.max(ftp * 1.45, metrics.maxPower, 1);
 
   // Power bars with exact width (no overlap) to prevent color bleed
@@ -836,7 +835,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
     ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
-  drawPowerLine(powerLine, x, y, width, height, maxGraphPower);
+  drawPowerLine(powers, x, y, width, height, maxGraphPower);
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, adaptiveWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
@@ -844,7 +843,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   ctx.restore();
 
   const maxPowerIndex = powers.reduce((best, value, index) => value > powers[best] ? index : best, 0);
-  const maxPowerX = x + (maxPowerIndex / Math.max(1, powers.length - 1)) * width;
+  const maxPowerX = x + (maxPowerIndex + 0.5) * (width / Math.max(1, powers.length));
   const maxPowerY = getPowerLineY(powers[maxPowerIndex], y, height, maxGraphPower);
   drawPeakLabel(`${Math.round(powers[maxPowerIndex])}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22);
   if (metrics.maxHeartRate) {
@@ -879,7 +878,7 @@ function drawPowerLineStroke(values, x, y, width, height, max, color, lineWidth)
   let started = false;
   values.forEach((value, index) => {
     if (!Number.isFinite(value)) return;
-    const px = x + (index / Math.max(1, values.length - 1)) * width;
+    const px = x + (index + 0.5) * (width / Math.max(1, values.length));
     const py = getPowerLineY(value, y, height, max);
     if (!started) {
       ctx.moveTo(px, py);
