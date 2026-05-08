@@ -858,20 +858,24 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   ctx.roundRect(x, y, width, height, 10);
   ctx.clip();
   const maxSamples = width;
-  const powers = downsampleSeries(rollingPower(metrics.records, 3), maxSamples);
-  const powerLine = downsampleSeries(rollingPower(metrics.records, 5), maxSamples);
+
+  // Scale smoothing window with data density to prevent color bleeding on long rides
+  const adaptiveWindow = Math.max(3, Math.ceil(metrics.records.length / maxSamples));
+  const powers = downsampleSeries(rollingPower(metrics.records, adaptiveWindow), maxSamples);
+  const powerLine = downsampleSeries(rollingPower(metrics.records, adaptiveWindow * 2), maxSamples);
   const maxGraphPower = Math.max(ftp * 1.45, metrics.maxPower, 1);
+
+  // Power bars with exact width (no overlap) to prevent color bleed
+  const barW = width / Math.max(1, powers.length);
   powers.forEach((p, index) => {
-    const px = x + (index / Math.max(1, powers.length - 1)) * width;
-    const barW = Math.max(1, width / powers.length + 0.25);
     const barH = Math.min(height - 5, (p / maxGraphPower) * (height - 58));
     ctx.fillStyle = zoneColor(p, ftp);
     ctx.globalAlpha = 0.82;
-    ctx.fillRect(px, y + height - barH, barW, barH);
+    ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
   drawPowerLine(powerLine, x, y, width, height, maxGraphPower);
-  const hrs = downsampleSeries(rollingHeartRate(metrics.records, 5), maxSamples);
+  const hrs = downsampleSeries(rollingHeartRate(metrics.records, adaptiveWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
   drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
