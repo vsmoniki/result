@@ -821,8 +821,8 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   ctx.clip();
   const maxSamples = width;
 
-  // Scale smoothing window with data density to prevent color bleeding on long rides
-  const adaptiveWindow = Math.max(3, Math.ceil(metrics.records.length / maxSamples));
+  const d = metrics.duration;
+  const adaptiveWindow = d < 7200 ? 2 : d < 10800 ? 3 : d < 18000 ? 4 : 5;
   const powers = downsampleSeries(rollingPower(metrics.records, adaptiveWindow), maxSamples);
   const maxDisplayedPower = powers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
   const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
@@ -836,8 +836,9 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
     ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
-  drawPowerLine(powers, x, y, width, height, maxGraphPower);
-  const hrs = downsampleSeries(rollingHeartRate(metrics.records, adaptiveWindow), maxSamples);
+  const step = adaptiveWindow - 2;
+  drawPowerLine(powers, x, y, width, height, maxGraphPower, 1.7 - step * 0.3, 3.6 - step * 0.8);
+  const hrs = downsampleSeries(rollingHeartRate(metrics.records, Math.max(3, adaptiveWindow)), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
   drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
@@ -863,12 +864,12 @@ function getPowerLineY(value, y, height, max) {
   return y + height - (value / Math.max(1, max)) * (height - 58);
 }
 
-function drawPowerLine(values, x, y, width, height, max) {
+function drawPowerLine(values, x, y, width, height, max, lineWidth = 1.7, shadowWidth = 3.6) {
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  drawPowerLineStroke(values, x, y, width, height, max, 'rgba(45,45,45,.5)', 3.6);
-  drawPowerLineStroke(values, x, y, width, height, max, '#f8f8f2', 1.7);
+  drawPowerLineStroke(values, x, y, width, height, max, 'rgba(45,45,45,.5)', shadowWidth);
+  drawPowerLineStroke(values, x, y, width, height, max, '#f8f8f2', lineWidth);
   ctx.restore();
 }
 
