@@ -821,7 +821,8 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   ctx.clip();
   const maxSamples = width;
 
-  const powers = downsampleSeries(rollingPower(metrics.records, 2), maxSamples);
+  const adaptiveWindow = Math.max(2, Math.ceil(metrics.records.length / maxSamples / 2));
+  const powers = downsampleSeries(rollingPower(metrics.records, adaptiveWindow), maxSamples);
   const maxDisplayedPower = powers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
   const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
 
@@ -835,7 +836,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   });
   ctx.globalAlpha = 1;
   drawPowerLine(powers, x, y, width, height, maxGraphPower);
-  const hrs = downsampleSeries(rollingHeartRate(metrics.records, 3), maxSamples);
+  const hrs = downsampleSeries(rollingHeartRate(metrics.records, Math.max(3, adaptiveWindow)), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
   drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
