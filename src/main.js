@@ -1,5 +1,5 @@
 import FitParser from 'fit-file-parser';
-import { calculateNormalizedPower, calculateStressPoints, rollingHeartRate, rollingPower } from './sp.js';
+import { calculateNormalizedPower, calculateStressPoints } from './sp.js';
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -614,6 +614,47 @@ function bestRollingAverage(records, seconds, field = 'power') {
   return best;
 }
 
+function rollingMetric(records, field, windowSeconds) {
+  const window = Math.max(1, Number(windowSeconds) || 1);
+  let sum = 0;
+  let validCount = 0;
+  let left = 0;
+
+  return records.map((record, index) => {
+    const value = record[field];
+    if (Number.isFinite(value)) {
+      sum += value;
+      validCount += 1;
+    }
+
+    while (left < index && getRecordAgeSeconds(records[left], record, left, index) >= window) {
+      const leftValue = records[left][field];
+      if (Number.isFinite(leftValue)) {
+        sum -= leftValue;
+        validCount -= 1;
+      }
+      left += 1;
+    }
+
+    return validCount ? sum / validCount : NaN;
+  });
+}
+
+function getRecordAgeSeconds(olderRecord, newerRecord, olderIndex, newerIndex) {
+  if (Number.isFinite(olderRecord?.elapsed) && Number.isFinite(newerRecord?.elapsed)) {
+    return newerRecord.elapsed - olderRecord.elapsed;
+  }
+  return newerIndex - olderIndex;
+}
+
+function rollingPower(records, windowSeconds = 2) {
+  return rollingMetric(records, 'power', windowSeconds).map((value) => value || 0);
+}
+
+function rollingHeartRate(records, windowSeconds = 3) {
+  return rollingMetric(records, 'heartRate', windowSeconds).map((value) => value || NaN);
+}
+
 function average(values) {
   const valid = values.filter(Number.isFinite);
   return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : 0;
@@ -884,7 +925,8 @@ function drawTimeline(metrics, { ftp, maxHrSetting, powerAverageSeconds }) {
     ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
-  drawPowerLine(powers, x, y, width, height, maxGraphPower);
+  const step = Math.min(3, Math.max(0, powerWindow - 2));
+  drawPowerLine(powers, x, y, width, height, maxGraphPower, 1.7 - step * 0.3, 3.6 - step * 0.8);
   const heartWindow = Math.max(3, getDefaultPowerAverageSeconds(metrics));
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
