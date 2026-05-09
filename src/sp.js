@@ -59,3 +59,58 @@ export function calculateStressPoints(durationSeconds, normalizedPower, ftp) {
   const intensityFactor = normalizedPower / ftp;
   return Math.round((durationSeconds * normalizedPower * intensityFactor) / (ftp * 3600) * 100);
 }
+
+export function rollingMetric(records, field, windowSeconds) {
+  const window = Math.max(1, Number(windowSeconds) || 1);
+  let sum = 0;
+  let validCount = 0;
+  let left = 0;
+
+  return records.map((record, index) => {
+    const value = record[field];
+    if (Number.isFinite(value)) {
+      sum += value;
+      validCount += 1;
+    }
+
+    while (left < index && getRecordAgeSeconds(records[left], record, left, index) >= window) {
+      const leftValue = records[left][field];
+      if (Number.isFinite(leftValue)) {
+        sum -= leftValue;
+        validCount -= 1;
+      }
+      left += 1;
+    }
+
+    return validCount ? sum / validCount : NaN;
+  });
+}
+
+function getRecordAgeSeconds(olderRecord, newerRecord, olderIndex, newerIndex) {
+  if (Number.isFinite(olderRecord?.elapsed) && Number.isFinite(newerRecord?.elapsed)) {
+    return newerRecord.elapsed - olderRecord.elapsed;
+  }
+  return newerIndex - olderIndex;
+}
+
+export function rollingPower(records, windowSeconds = 2) {
+  const window = Math.max(1, Math.round(Number(windowSeconds) || 1));
+  if (window <= 1) return rollingMetric(records, 'power', 1).map((value) => value || 0);
+
+  // Two box averages form a triangular-weighted average. This keeps the
+  // timeline visually smoother as the slider approaches 30 seconds than a
+  // single rectangular window, which can amplify some oscillation periods.
+  const leadingWindow = Math.ceil(window / 2);
+  const trailingWindow = window - leadingWindow + 1;
+  const firstPass = rollingMetric(records, 'power', leadingWindow);
+  const secondPassRecords = records.map((record, index) => ({
+    elapsed: record.elapsed,
+    value: firstPass[index],
+  }));
+
+  return rollingMetric(secondPassRecords, 'value', trailingWindow).map((value) => value || 0);
+}
+
+export function rollingHeartRate(records, windowSeconds = 3) {
+  return rollingMetric(records, 'heartRate', windowSeconds).map((value) => value || NaN);
+}
