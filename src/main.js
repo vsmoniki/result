@@ -957,6 +957,15 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
   drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
+
+  if (maxPowerPeak) {
+    const peakDownsampledIndex = Math.min(powers.length - 1, Math.floor(maxPowerPeak.index * powers.length / averagedPowers.length));
+    const rawBarH = Math.min(height - 5, (maxPowerPeak.power / maxGraphPower) * (height - 58));
+    ctx.fillStyle = zoneColor(maxPowerPeak.power, ftp);
+    ctx.globalAlpha = 0.82;
+    ctx.fillRect(x + peakDownsampledIndex * barW, y + height - rawBarH, barW, rawBarH);
+    ctx.globalAlpha = 1;
+  }
   ctx.restore();
 
   if (maxPowerPeak) {
