@@ -13,6 +13,7 @@ const state = {
   fileInputKey: null,
   autoRideTitle: '',
   isLoadingFile: false,
+  powerLineWidthTouched: false,
 };
 
 // Guard against duplicate activations while the native file picker is open.
@@ -27,6 +28,9 @@ const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = $('#fitFile');
 const fileDrop = $('#fileDrop');
+const powerLineWidthSlider = $('#powerLineWidth');
+const powerLineWidthValue = $('#powerLineWidthValue');
+const resetPowerLineWidthButton = $('#resetPowerLineWidth');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
@@ -50,12 +54,15 @@ $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
 $('#ftp').addEventListener('input', syncSp);
+powerLineWidthSlider.addEventListener('input', handlePowerLineWidthInput);
+resetPowerLineWidthButton.addEventListener('click', resetPowerLineWidth);
 
 function syncMode() {
   const mode = getMode();
   $('#finishInputs').classList.toggle('hidden', mode !== 'finish');
   $('#reportInputs').classList.toggle('hidden', mode !== 'report');
   clearGeneratedDownload();
+  syncPowerLineWidthDefault();
   drawPlaceholder();
 }
 
@@ -142,6 +149,7 @@ async function processSelectedFile(file) {
     state.metrics = metrics;
     state.isLoadingFile = false;
     syncRideTitle(sourceData, file);
+    syncPowerLineWidthDefault();
     syncSp();
     $('#generate').disabled = false;
     fileDrop.classList.add('has-file');
@@ -169,6 +177,7 @@ function beginFileSelection(file) {
   $('#fileName').textContent = file.name;
   clearGeneratedDownload();
   $('#generate').disabled = true;
+  syncPowerLineWidthDefault();
   drawPlaceholder();
   return selectionToken;
 }
@@ -195,6 +204,50 @@ function handleRideTitleInput(event) {
   if (event.currentTarget.value !== state.autoRideTitle) {
     state.autoRideTitle = '';
   }
+}
+
+function handlePowerLineWidthInput() {
+  state.powerLineWidthTouched = true;
+  syncPowerLineWidthValue();
+  clearGeneratedDownload();
+  if (getMode() === 'report' && canGenerateImage()) generateImage();
+}
+
+function resetPowerLineWidth() {
+  state.powerLineWidthTouched = false;
+  syncPowerLineWidthDefault();
+  clearGeneratedDownload();
+  if (getMode() === 'report' && canGenerateImage()) generateImage();
+}
+
+function syncPowerLineWidthDefault() {
+  if (!state.powerLineWidthTouched) {
+    powerLineWidthSlider.value = getDefaultPowerLineWidth(state.metrics);
+  }
+  syncPowerLineWidthValue();
+}
+
+function syncPowerLineWidthValue() {
+  powerLineWidthValue.textContent = `${formatPowerLineWidth(getSelectedPowerLineWidth(state.metrics))}px`;
+}
+
+function getSelectedPowerLineWidth(metrics) {
+  if (!state.powerLineWidthTouched) return getDefaultPowerLineWidth(metrics);
+  return clampPowerLineWidth(Number(powerLineWidthSlider.value));
+}
+
+function getDefaultPowerLineWidth(metrics) {
+  const adaptiveWindow = getTimelineAdaptiveWindow(metrics);
+  return clampPowerLineWidth(1.7 - (adaptiveWindow - 2) * 0.3);
+}
+
+function clampPowerLineWidth(value) {
+  if (!Number.isFinite(value)) return 1.7;
+  return Math.max(0.8, Math.min(2.6, Math.round(value * 10) / 10));
+}
+
+function formatPowerLineWidth(value) {
+  return value.toFixed(1);
 }
 
 function syncSp() {
@@ -398,7 +451,8 @@ function generateImage() {
     const maxHrSetting = Number($('#maxHrSetting').value);
     if (!title || !isValidPositiveNumber(ftp) || !isValidPositiveNumber(maxHrSetting)) return setStatus('タイトル、FTP、最大心拍数を入力してください。', true);
     const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
-    drawRideReport(state.metrics, { title, ftp, maxHrSetting, sp });
+    const powerLineWidth = getSelectedPowerLineWidth(state.metrics);
+    drawRideReport(state.metrics, { title, ftp, maxHrSetting, sp, powerLineWidth });
   }
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -818,7 +872,7 @@ function drawTabs() {
   });
 }
 
-function drawTimeline(metrics, { ftp, maxHrSetting }) {
+function drawTimeline(metrics, { ftp, maxHrSetting, powerLineWidth }) {
   const x = 27;
   const y = 195;
   const width = 948;
@@ -830,8 +884,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   ctx.clip();
   const maxSamples = width;
 
-  const d = metrics.duration;
-  const adaptiveWindow = d < 7200 ? 2 : d < 10800 ? 3 : d < 18000 ? 4 : 5;
+  const adaptiveWindow = getTimelineAdaptiveWindow(metrics);
   const powers = downsampleSeries(rollingPower(metrics.records, adaptiveWindow), maxSamples);
   const maxDisplayedPower = powers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
   const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
@@ -845,8 +898,10 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
     ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
-  const step = adaptiveWindow - 2;
-  drawPowerLine(powers, x, y, width, height, maxGraphPower, 1.7 - step * 0.3, 3.6 - step * 0.8);
+  const defaultLineWidth = getDefaultPowerLineWidth(metrics);
+  const lineWidth = clampPowerLineWidth(powerLineWidth ?? defaultLineWidth);
+  const shadowWidth = getPowerLineShadowWidth(lineWidth, defaultLineWidth, adaptiveWindow);
+  drawPowerLine(powers, x, y, width, height, maxGraphPower, lineWidth, shadowWidth);
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, Math.max(3, adaptiveWindow)), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
@@ -866,6 +921,20 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
     const maxHrY = getSeriesY(hrs[maxHrIndex], y + 28, height - 84, heartLineMax, heartLineMin);
     drawPeakLabel(`${Math.round(hrs[maxHrIndex])}bpm`, maxHrX, maxHrY - 16, '#fff', '#e11f28', y + 16, y + height - 22);
   }
+}
+
+function getTimelineAdaptiveWindow(metrics) {
+  const d = metrics?.duration ?? 0;
+  if (d >= 18000) return 5;
+  if (d >= 10800) return 4;
+  if (d >= 7200) return 3;
+  return 2;
+}
+
+function getPowerLineShadowWidth(lineWidth, defaultLineWidth, adaptiveWindow) {
+  const defaultShadowWidth = 3.6 - (adaptiveWindow - 2) * 0.8;
+  const scale = lineWidth / Math.max(0.1, defaultLineWidth);
+  return Math.max(lineWidth + 0.4, defaultShadowWidth * scale);
 }
 
 function getSeriesY(value, y, height, max, min = 0) {
@@ -1228,4 +1297,5 @@ function roundedLeftRect(context, x, y, width, height, radius, fillStyle) {
   context.fill();
 }
 
+syncPowerLineWidthDefault();
 drawPlaceholder();

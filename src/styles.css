@@ -173,8 +173,59 @@ h1 {
   grid-template-columns: repeat(2, minmax(150px, 1fr));
 }
 
-.ride-title-field {
+.ride-title-field,
+.power-line-control {
   grid-column: 1 / -1;
+}
+
+.power-line-control {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 16px;
+  background: rgba(255,255,255,.06);
+}
+
+.power-line-header,
+.power-line-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.power-line-header label {
+  color: #b9c9d8;
+  font-size: .93rem;
+  font-weight: 800;
+}
+
+.power-line-header strong {
+  color: #fff;
+  font-weight: 950;
+}
+
+.power-line-control input[type="range"] {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  accent-color: #ff5b1a;
+}
+
+.power-line-footer {
+  color: #b9c9d8;
+  font-size: .8rem;
+  font-weight: 800;
+}
+
+.secondary-button {
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,.14);
+  box-shadow: none;
+  font-size: .82rem;
 }
 
 .form-grid label {
