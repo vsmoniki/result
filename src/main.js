@@ -964,7 +964,11 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
     const peakDownsampledIndex = Math.min(powers.length - 1, Math.floor(maxDisplayedPowerIndex * powers.length / averagedPowers.length));
     const maxPowerX = x + (peakDownsampledIndex + 0.5) * (width / Math.max(1, powers.length));
     const maxPowerY = getPowerLineY(maxDisplayedPower, y, height, maxGraphPower);
-    const peakOneSec = metrics.records[maxDisplayedPowerIndex]?.power ?? maxDisplayedPower;
+    const centerElapsed = metrics.records[maxDisplayedPowerIndex]?.elapsed;
+    const peakOneSec = metrics.records.reduce((max, record) => {
+      if (!Number.isFinite(record.power) || !Number.isFinite(record.elapsed) || !Number.isFinite(centerElapsed)) return max;
+      return Math.abs(record.elapsed - centerElapsed) <= powerWindow ? Math.max(max, record.power) : max;
+    }, metrics.records[maxDisplayedPowerIndex]?.power ?? maxDisplayedPower);
     drawPeakLabel(`${Math.round(peakOneSec)}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22);
   }
   const maxHeartRatePeak = findMaxHeartRateRecord(metrics.records);
