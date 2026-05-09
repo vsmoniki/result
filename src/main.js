@@ -965,6 +965,24 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
     ctx.globalAlpha = 0.82;
     ctx.fillRect(x + peakDownsampledIndex * barW, y + height - rawBarH, barW, rawBarH);
     ctx.globalAlpha = 1;
+    const spikeLineX = x + peakDownsampledIndex * barW;
+    const spikeLineY = getPowerLineY(maxPowerPeak.power, y, height, maxGraphPower);
+    ctx.save();
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'miter';
+    ctx.strokeStyle = 'rgba(45,45,45,.5)';
+    ctx.lineWidth = 3.6 - step * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(spikeLineX, spikeLineY);
+    ctx.lineTo(spikeLineX + barW, spikeLineY);
+    ctx.stroke();
+    ctx.strokeStyle = '#f8f8f2';
+    ctx.lineWidth = 1.7 - step * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(spikeLineX, spikeLineY);
+    ctx.lineTo(spikeLineX + barW, spikeLineY);
+    ctx.stroke();
+    ctx.restore();
   }
   ctx.restore();
 
