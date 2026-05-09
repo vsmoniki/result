@@ -929,9 +929,9 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
 
   const averagedPowers = rollingPower(metrics.records, powerWindow);
   const powers = downsampleSeries(averagedPowers, maxSamples);
-  const maxDisplayedPower = averagedPowers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
-  const maxPowerPeak = findMaxPowerRecord(metrics.records);
-  const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, maxPowerPeak?.power || 0, 1);
+  const maxDisplayedPowerIndex = averagedPowers.reduce((maxI, p, i) => (Number.isFinite(p) && p > (averagedPowers[maxI] ?? 0) ? i : maxI), 0);
+  const maxDisplayedPower = averagedPowers[maxDisplayedPowerIndex] ?? 0;
+  const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
 
   // Power bars with exact width (no overlap) to prevent color bleed
   const barW = width / Math.max(1, powers.length);
@@ -949,39 +949,18 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
   drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
 
-  if (maxPowerPeak) {
-    const peakDownsampledIndex = Math.min(powers.length - 1, Math.floor(maxPowerPeak.index * powers.length / averagedPowers.length));
-    const rawBarH = Math.min(height - 5, (maxPowerPeak.power / maxGraphPower) * (height - 58));
-    ctx.fillStyle = zoneColor(maxPowerPeak.power, ftp);
-    ctx.globalAlpha = 0.82;
-    ctx.fillRect(x + peakDownsampledIndex * barW, y + height - rawBarH, barW, rawBarH);
-    ctx.globalAlpha = 1;
-    const spikeLineX = x + peakDownsampledIndex * barW;
-    const spikeLineY = getPowerLineY(maxPowerPeak.power, y, height, maxGraphPower);
-    ctx.save();
-    ctx.lineCap = 'butt';
-    ctx.lineJoin = 'miter';
-    ctx.strokeStyle = 'rgba(45,45,45,.5)';
-    ctx.lineWidth = 3.6 - step * 0.8;
-    ctx.beginPath();
-    ctx.moveTo(spikeLineX, spikeLineY);
-    ctx.lineTo(spikeLineX + barW, spikeLineY);
-    ctx.stroke();
-    ctx.strokeStyle = '#f8f8f2';
-    ctx.lineWidth = 1.7 - step * 0.3;
-    ctx.beginPath();
-    ctx.moveTo(spikeLineX, spikeLineY);
-    ctx.lineTo(spikeLineX + barW, spikeLineY);
-    ctx.stroke();
-    ctx.restore();
-  }
   ctx.restore();
 
-  if (maxPowerPeak) {
-    const downsampledIndex = Math.min(powers.length - 1, Math.floor(maxPowerPeak.index * powers.length / averagedPowers.length));
-    const maxPowerX = x + (downsampledIndex + 0.5) * (width / Math.max(1, powers.length));
-    const maxPowerY = getPowerLineY(maxPowerPeak.power, y, height, maxGraphPower);
-    drawPeakLabel(`${Math.round(maxPowerPeak.power)}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22);
+  if (maxDisplayedPower > 0) {
+    const peakDownsampledIndex = Math.min(powers.length - 1, Math.floor(maxDisplayedPowerIndex * powers.length / averagedPowers.length));
+    const maxPowerX = x + (peakDownsampledIndex + 0.5) * (width / Math.max(1, powers.length));
+    const maxPowerY = getPowerLineY(maxDisplayedPower, y, height, maxGraphPower);
+    const centerElapsed = metrics.records[maxDisplayedPowerIndex]?.elapsed;
+    const peakOneSec = metrics.records.reduce((max, record) => {
+      if (!Number.isFinite(record.power) || !Number.isFinite(record.elapsed) || !Number.isFinite(centerElapsed)) return max;
+      return Math.abs(record.elapsed - centerElapsed) <= powerWindow ? Math.max(max, record.power) : max;
+    }, metrics.records[maxDisplayedPowerIndex]?.power ?? maxDisplayedPower);
+    drawPeakLabel(`${Math.round(peakOneSec)}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22);
   }
   const maxHeartRatePeak = findMaxHeartRateRecord(metrics.records);
   if (maxHeartRatePeak) {
