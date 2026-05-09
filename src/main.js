@@ -945,11 +945,11 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
     const maxPowerY = getPowerLineY(maxPowerPeak.power, y, height, maxGraphPower);
     drawPeakLabel(`${Math.round(maxPowerPeak.power)}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22);
   }
-  if (metrics.maxHeartRate) {
-    const maxHrIndex = hrs.reduce((best, value, index) => (Number.isFinite(value) && value > (hrs[best] || 0)) ? index : best, 0);
-    const maxHrX = x + (maxHrIndex / Math.max(1, hrs.length - 1)) * width;
-    const maxHrY = getSeriesY(hrs[maxHrIndex], y + 28, height - 84, heartLineMax, heartLineMin);
-    drawPeakLabel(`${Math.round(hrs[maxHrIndex])}bpm`, maxHrX, maxHrY - 16, '#fff', '#e11f28', y + 16, y + height - 22);
+  const maxHeartRatePeak = findMaxHeartRateRecord(metrics.records);
+  if (maxHeartRatePeak) {
+    const maxHrX = getTimelineRecordX(maxHeartRatePeak.record, metrics.records, x, width);
+    const maxHrY = getSeriesY(maxHeartRatePeak.heartRate, y + 28, height - 84, heartLineMax, heartLineMin);
+    drawPeakLabel(`${Math.round(maxHeartRatePeak.heartRate)}bpm`, maxHrX, maxHrY - 16, '#fff', '#e11f28', y + 16, y + height - 22);
   }
 }
 
@@ -960,6 +960,18 @@ function findMaxPowerRecord(records) {
     if (!Number.isFinite(record?.power)) return;
     if (!peak || record.power > peak.power) {
       peak = { record, index, power: record.power };
+    }
+  });
+  return peak;
+}
+
+
+function findMaxHeartRateRecord(records) {
+  let peak = null;
+  records.forEach((record, index) => {
+    if (!Number.isFinite(record?.heartRate)) return;
+    if (!peak || record.heartRate > peak.heartRate) {
+      peak = { record, index, heartRate: record.heartRate };
     }
   });
   return peak;
