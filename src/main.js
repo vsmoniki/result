@@ -230,7 +230,9 @@ function syncGraphSmoothnessSliderDefault() {
 
 function syncGraphSmoothnessValue() {
   const smoothness = getSelectedGraphSmoothness();
-  graphSmoothnessValue.textContent = `${smoothness}%`;
+  const powerWindow = getTimelinePowerAverageSeconds(state.metrics, smoothness);
+  const samplePercent = getTimelineSampleDensityPercent(smoothness);
+  graphSmoothnessValue.textContent = `${powerWindow}秒平均 / ${samplePercent}%`;
 }
 
 function getSelectedGraphSmoothness() {
@@ -248,6 +250,30 @@ function getAutomaticTimelineAverageSeconds(metrics) {
   if (duration >= 10800) return 4;
   if (duration >= 7200) return 3;
   return 2;
+}
+
+function getTimelineLevelingConfig(metrics, smoothness, graphWidth) {
+  const powerWindow = getTimelinePowerAverageSeconds(metrics, smoothness);
+  const heartWindow = Math.max(3, Math.round(powerWindow * 1.25));
+  const sampleDensity = getTimelineSampleDensity(smoothness);
+  const maxSamples = Math.max(120, Math.round(graphWidth * sampleDensity));
+  return { powerWindow, heartWindow, maxSamples };
+}
+
+function getTimelinePowerAverageSeconds(metrics, smoothness) {
+  const baseWindow = getAutomaticTimelineAverageSeconds(metrics);
+  const amount = clampGraphSmoothness(smoothness) / 100;
+  const maxWindow = 30;
+  return Math.min(maxWindow, baseWindow + Math.round(amount ** 1.15 * (maxWindow - baseWindow)));
+}
+
+function getTimelineSampleDensity(smoothness) {
+  const amount = clampGraphSmoothness(smoothness) / 100;
+  return 1 - amount ** 1.2 * 0.72;
+}
+
+function getTimelineSampleDensityPercent(smoothness) {
+  return Math.round(getTimelineSampleDensity(smoothness) * 100);
 }
 
 function clampGraphSmoothness(value) {
@@ -913,11 +939,10 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
   ctx.beginPath();
   ctx.roundRect(x, y, width, height, 10);
   ctx.clip();
-  const maxSamples = width;
+  const { powerWindow, heartWindow, maxSamples } = getTimelineLevelingConfig(metrics, graphSmoothness, width);
 
-  const powerWindow = getAutomaticTimelineAverageSeconds(metrics);
   const averagedPowers = rollingPower(metrics.records, powerWindow);
-  const powers = smoothGraphSeries(downsampleSeries(averagedPowers, maxSamples), graphSmoothness);
+  const powers = downsampleSeries(averagedPowers, maxSamples);
   const maxDisplayedPower = averagedPowers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
   const maxPowerPeak = findMaxPowerRecord(metrics.records);
   const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, maxPowerPeak?.power || 0, 1);
@@ -933,8 +958,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
   ctx.globalAlpha = 1;
   const step = Math.min(3, Math.max(0, powerWindow - 2));
   drawPowerLine(powers, x, y, width, height, maxGraphPower, 1.7 - step * 0.3, 3.6 - step * 0.8);
-  const heartWindow = Math.max(3, getAutomaticTimelineAverageSeconds(metrics));
-  const hrs = smoothGraphSeries(downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples), graphSmoothness);
+  const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
   drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
@@ -1006,8 +1030,8 @@ function getPowerLineY(value, y, height, max) {
 
 function drawPowerLine(values, x, y, width, height, max, lineWidth = 1.7, shadowWidth = 3.6) {
   ctx.save();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'miter';
   drawPowerLineStroke(values, x, y, width, height, max, 'rgba(45,45,45,.5)', shadowWidth);
   drawPowerLineStroke(values, x, y, width, height, max, '#f8f8f2', lineWidth);
   ctx.restore();
@@ -1049,50 +1073,6 @@ function downsampleSeries(values, maxPoints, strategy = 'average') {
     result.push(slice.length ? slice.reduce((a, b) => a + b, 0) / slice.length : NaN);
   }
   return result;
-}
-
-function smoothGraphSeries(values, smoothness) {
-  const amount = clampGraphSmoothness(smoothness) / 100;
-  if (!values.length || amount <= 0) return values;
-
-  const radius = Math.max(1, Math.round(2 + amount ** 1.25 * 72));
-  const passes = 1 + Math.floor(amount * 4);
-  let result = values.slice();
-
-  for (let pass = 0; pass < passes; pass += 1) {
-    result = smoothGraphSeriesPass(result, radius);
-  }
-
-  // Blend back a little of the original data so peaks remain visually anchored
-  // even when the slider is set to very smooth.
-  const blend = Math.min(0.96, 0.18 + amount * 0.78);
-  return result.map((value, index) => {
-    const original = values[index];
-    if (!Number.isFinite(value)) return original;
-    if (!Number.isFinite(original)) return value;
-    return original * (1 - blend) + value * blend;
-  });
-}
-
-function smoothGraphSeriesPass(values, radius) {
-  return values.map((value, index) => {
-    if (!Number.isFinite(value)) return value;
-
-    let weightedSum = 0;
-    let totalWeight = 0;
-    const start = Math.max(0, index - radius);
-    const end = Math.min(values.length - 1, index + radius);
-    for (let i = start; i <= end; i += 1) {
-      const sample = values[i];
-      if (!Number.isFinite(sample)) continue;
-      const distance = Math.abs(i - index);
-      const weight = (radius + 1 - distance) ** 2;
-      weightedSum += sample * weight;
-      totalWeight += weight;
-    }
-
-    return totalWeight ? weightedSum / totalWeight : value;
-  });
 }
 
 function drawSeries(values, x, y, width, height, max, color, lineWidth, min = 0) {
