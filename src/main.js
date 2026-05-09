@@ -22,6 +22,7 @@ let pickerActivatedAt = 0;
 const PICKER_TIMEOUT_MS = 30_000;
 const DEFAULT_CANVAS_WIDTH = 1920;
 const DEFAULT_CANVAS_HEIGHT = 1080;
+const LEGACY_GRAPH_SMOOTHNESS = 0;
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const canvas = $('#canvas');
@@ -238,7 +239,7 @@ function getSelectedGraphSmoothness() {
 }
 
 function getDefaultGraphSmoothness() {
-  return 60;
+  return LEGACY_GRAPH_SMOOTHNESS;
 }
 
 function getAutomaticTimelineAverageSeconds(metrics) {
