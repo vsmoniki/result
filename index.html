@@ -44,14 +44,14 @@
             <label>SP<input id="spInput" type="number" min="0" step="1" /></label>
             <div class="graph-smoothness-control">
               <div class="graph-smoothness-header">
-                <label for="graphSmoothness">グラフの滑らかさ</label>
-                <strong id="graphSmoothnessValue">0%</strong>
+                <label for="graphSmoothness">グラフの平準化</label>
+                <strong id="graphSmoothnessValue">2秒平均 / 100%</strong>
               </div>
               <input id="graphSmoothness" type="range" min="0" max="100" step="1" value="0" />
               <div class="graph-smoothness-footer">
-                <span>シャープ</span>
+                <span>細かい</span>
                 <button id="resetGraphSmoothness" class="secondary-button" type="button">デフォルトに戻す</button>
-                <span>なめらか</span>
+                <span>平準化</span>
               </div>
             </div>
           </div>
