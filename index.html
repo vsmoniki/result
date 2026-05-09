@@ -42,18 +42,6 @@
             <label>FTP（W）<input id="ftp" type="number" min="1" step="1" required /></label>
             <label>最大心拍数（bpm）<input id="maxHrSetting" type="number" min="80" step="1" required /></label>
             <label>SP<input id="spInput" type="number" min="0" step="1" /></label>
-            <div class="graph-smoothness-control">
-              <div class="graph-smoothness-header">
-                <label for="graphSmoothness">グラフの平準化</label>
-                <strong id="graphSmoothnessValue">0%</strong>
-              </div>
-              <input id="graphSmoothness" type="range" min="0" max="100" step="1" value="0" />
-              <div class="graph-smoothness-footer">
-                <span>細かい</span>
-                <button id="resetGraphSmoothness" class="secondary-button" type="button">デフォルトに戻す</button>
-                <span>平準化</span>
-              </div>
-            </div>
           </div>
 
           <div class="actions">
@@ -68,6 +56,20 @@
             <h2>プレビュー</h2>
             <span id="summary"></span>
           </div>
+          <details class="preview-options">
+            <summary>オプション</summary>
+            <div class="graph-smoothness-control">
+              <div class="graph-smoothness-header">
+                <label for="graphSmoothness">グラフの平準化</label>
+                <strong id="graphSmoothnessValue">0%</strong>
+              </div>
+              <input id="graphSmoothness" type="range" min="0" max="100" step="1" value="0" />
+              <div class="graph-smoothness-footer">
+                <span>細かい</span>
+                <span>平準化</span>
+              </div>
+            </div>
+          </details>
           <canvas id="canvas" width="1920" height="1080" aria-label="生成画像プレビュー"></canvas>
         </section>
       </main>

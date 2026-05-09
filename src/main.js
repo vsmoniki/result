@@ -31,7 +31,6 @@ const fileInput = $('#fitFile');
 const fileDrop = $('#fileDrop');
 const graphSmoothnessSlider = $('#graphSmoothness');
 const graphSmoothnessValue = $('#graphSmoothnessValue');
-const resetGraphSmoothnessButton = $('#resetGraphSmoothness');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
@@ -56,7 +55,6 @@ $('#download').addEventListener('click', savePng);
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
 $('#ftp').addEventListener('input', syncSp);
 graphSmoothnessSlider.addEventListener('input', handleGraphSmoothnessInput);
-resetGraphSmoothnessButton.addEventListener('click', resetGraphSmoothness);
 
 function syncMode() {
   const mode = getMode();
@@ -210,13 +208,6 @@ function handleRideTitleInput(event) {
 function handleGraphSmoothnessInput() {
   state.graphSmoothnessTouched = true;
   syncGraphSmoothnessValue();
-  clearGeneratedDownload();
-  if (getMode() === 'report' && canGenerateImage()) generateImage();
-}
-
-function resetGraphSmoothness() {
-  state.graphSmoothnessTouched = false;
-  syncGraphSmoothnessSliderDefault();
   clearGeneratedDownload();
   if (getMode() === 'report' && canGenerateImage()) generateImage();
 }

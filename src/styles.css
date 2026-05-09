@@ -173,8 +173,7 @@ h1 {
   grid-template-columns: repeat(2, minmax(150px, 1fr));
 }
 
-.ride-title-field,
-.graph-smoothness-control {
+.ride-title-field {
   grid-column: 1 / -1;
 }
 
@@ -220,13 +219,6 @@ h1 {
   font-weight: 800;
 }
 
-.secondary-button {
-  border-radius: 999px;
-  padding: 8px 12px;
-  background: rgba(255,255,255,.14);
-  box-shadow: none;
-  font-size: .82rem;
-}
 
 .form-grid > label {
   display: grid;
@@ -300,6 +292,46 @@ button:disabled {
 .preview-toolbar h2 { margin-bottom: 0; }
 
 .preview-toolbar span { color: #9fd0ff; font-weight: 900; }
+
+.preview-options {
+  margin: 0 0 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 18px;
+  background: rgba(255,255,255,.05);
+}
+
+.preview-options summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  color: #f8fbff;
+  font-weight: 950;
+  list-style: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(255, 178, 26, .24);
+}
+
+.preview-options summary::-webkit-details-marker {
+  display: none;
+}
+
+.preview-options summary::after {
+  content: '＋';
+  color: #ffb21a;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.preview-options[open] summary::after {
+  content: '−';
+}
+
+.preview-options .graph-smoothness-control {
+  margin: 0 14px 14px;
+}
 
 canvas {
   display: block;
@@ -393,5 +425,19 @@ canvas {
     flex-direction: column;
     gap: 4px;
     padding: 2px 4px 10px;
+  }
+
+
+  .preview-options {
+    margin-bottom: 10px;
+    border-radius: 14px;
+  }
+
+  .preview-options summary {
+    padding: 11px 12px;
+  }
+
+  .preview-options .graph-smoothness-control {
+    margin: 0 10px 10px;
   }
 }
