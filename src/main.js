@@ -614,19 +614,45 @@ function bestRollingAverage(records, seconds, field = 'power') {
   return best;
 }
 
-function rollingMetric(records, field, windowSize) {
+function rollingMetric(records, field, windowSeconds) {
+  const window = Math.max(1, Number(windowSeconds) || 1);
+  let sum = 0;
+  let validCount = 0;
+  let left = 0;
+
   return records.map((record, index) => {
-    const from = Math.max(0, index - windowSize + 1);
-    return average(records.slice(from, index + 1).map((r) => r[field]));
+    const value = record[field];
+    if (Number.isFinite(value)) {
+      sum += value;
+      validCount += 1;
+    }
+
+    while (left < index && getRecordAgeSeconds(records[left], record, left, index) >= window) {
+      const leftValue = records[left][field];
+      if (Number.isFinite(leftValue)) {
+        sum -= leftValue;
+        validCount -= 1;
+      }
+      left += 1;
+    }
+
+    return validCount ? sum / validCount : NaN;
   });
 }
 
-function rollingPower(records, windowSize = 2) {
-  return rollingMetric(records, 'power', windowSize).map((value) => value || 0);
+function getRecordAgeSeconds(olderRecord, newerRecord, olderIndex, newerIndex) {
+  if (Number.isFinite(olderRecord?.elapsed) && Number.isFinite(newerRecord?.elapsed)) {
+    return newerRecord.elapsed - olderRecord.elapsed;
+  }
+  return newerIndex - olderIndex;
 }
 
-function rollingHeartRate(records, windowSize = 3) {
-  return rollingMetric(records, 'heartRate', windowSize).map((value) => value || NaN);
+function rollingPower(records, windowSeconds = 2) {
+  return rollingMetric(records, 'power', windowSeconds).map((value) => value || 0);
+}
+
+function rollingHeartRate(records, windowSeconds = 3) {
+  return rollingMetric(records, 'heartRate', windowSeconds).map((value) => value || NaN);
 }
 
 function average(values) {
@@ -885,8 +911,9 @@ function drawTimeline(metrics, { ftp, maxHrSetting, powerAverageSeconds }) {
   const maxSamples = width;
 
   const powerWindow = clampPowerAverageSeconds(powerAverageSeconds);
-  const powers = downsampleSeries(rollingPower(metrics.records, powerWindow), maxSamples);
-  const maxDisplayedPower = powers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
+  const smoothedPowers = rollingPower(metrics.records, powerWindow);
+  const powers = downsampleSeries(smoothedPowers, maxSamples, 'nearest');
+  const maxDisplayedPower = smoothedPowers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
   const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
 
   // Power bars with exact width (no overlap) to prevent color bleed
@@ -898,8 +925,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting, powerAverageSeconds }) {
     ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
-  const step = Math.min(3, Math.max(0, powerWindow - 2));
-  drawPowerLine(powers, x, y, width, height, maxGraphPower, 1.7 - step * 0.3, 3.6 - step * 0.8);
+  drawPowerLine(powers, x, y, width, height, maxGraphPower);
   const heartWindow = Math.max(3, getDefaultPowerAverageSeconds(metrics));
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
@@ -958,11 +984,17 @@ function drawPowerLineStroke(values, x, y, width, height, max, color, lineWidth)
   ctx.stroke();
 }
 
-function downsampleSeries(values, maxPoints) {
+function downsampleSeries(values, maxPoints, strategy = 'average') {
   if (values.length <= maxPoints) return values;
   const result = [];
   const ratio = values.length / maxPoints;
   for (let i = 0; i < maxPoints; i++) {
+    if (strategy === 'nearest') {
+      const index = Math.min(values.length - 1, Math.floor((i + 0.5) * ratio));
+      result.push(values[index]);
+      continue;
+    }
+
     const start = Math.floor(i * ratio);
     const end = Math.min(values.length, Math.floor((i + 1) * ratio));
     const slice = values.slice(start, end).filter(Number.isFinite);
