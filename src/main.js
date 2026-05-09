@@ -13,6 +13,7 @@ const state = {
   fileInputKey: null,
   autoRideTitle: '',
   isLoadingFile: false,
+  powerAverageSecondsTouched: false,
 };
 
 // Guard against duplicate activations while the native file picker is open.
@@ -27,6 +28,9 @@ const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = $('#fitFile');
 const fileDrop = $('#fileDrop');
+const powerAverageSlider = $('#powerAverageSeconds');
+const powerAverageValue = $('#powerAverageValue');
+const resetPowerAverageButton = $('#resetPowerAverage');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
@@ -50,12 +54,15 @@ $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
 $('#ftp').addEventListener('input', syncSp);
+powerAverageSlider.addEventListener('input', handlePowerAverageInput);
+resetPowerAverageButton.addEventListener('click', resetPowerAverageSeconds);
 
 function syncMode() {
   const mode = getMode();
   $('#finishInputs').classList.toggle('hidden', mode !== 'finish');
   $('#reportInputs').classList.toggle('hidden', mode !== 'report');
   clearGeneratedDownload();
+  syncPowerAverageSliderDefault();
   drawPlaceholder();
 }
 
@@ -142,6 +149,7 @@ async function processSelectedFile(file) {
     state.metrics = metrics;
     state.isLoadingFile = false;
     syncRideTitle(sourceData, file);
+    syncPowerAverageSliderDefault();
     syncSp();
     $('#generate').disabled = false;
     fileDrop.classList.add('has-file');
@@ -169,6 +177,7 @@ function beginFileSelection(file) {
   $('#fileName').textContent = file.name;
   clearGeneratedDownload();
   $('#generate').disabled = true;
+  syncPowerAverageSliderDefault();
   drawPlaceholder();
   return selectionToken;
 }
@@ -195,6 +204,50 @@ function handleRideTitleInput(event) {
   if (event.currentTarget.value !== state.autoRideTitle) {
     state.autoRideTitle = '';
   }
+}
+
+function handlePowerAverageInput() {
+  state.powerAverageSecondsTouched = true;
+  syncPowerAverageValue();
+  clearGeneratedDownload();
+  if (getMode() === 'report' && canGenerateImage()) generateImage();
+}
+
+function resetPowerAverageSeconds() {
+  state.powerAverageSecondsTouched = false;
+  syncPowerAverageSliderDefault();
+  clearGeneratedDownload();
+  if (getMode() === 'report' && canGenerateImage()) generateImage();
+}
+
+function syncPowerAverageSliderDefault() {
+  if (!state.powerAverageSecondsTouched) {
+    powerAverageSlider.value = getDefaultPowerAverageSeconds(state.metrics);
+  }
+  syncPowerAverageValue();
+}
+
+function syncPowerAverageValue() {
+  const seconds = getSelectedPowerAverageSeconds(state.metrics);
+  powerAverageValue.textContent = `${seconds}秒`;
+}
+
+function getSelectedPowerAverageSeconds(metrics) {
+  if (!state.powerAverageSecondsTouched) return getDefaultPowerAverageSeconds(metrics);
+  return clampPowerAverageSeconds(Number(powerAverageSlider.value));
+}
+
+function getDefaultPowerAverageSeconds(metrics) {
+  const duration = metrics?.duration ?? 0;
+  if (duration >= 18000) return 5;
+  if (duration >= 10800) return 4;
+  if (duration >= 7200) return 3;
+  return 2;
+}
+
+function clampPowerAverageSeconds(value) {
+  if (!Number.isFinite(value)) return 2;
+  return Math.max(1, Math.min(10, Math.round(value)));
 }
 
 function syncSp() {
@@ -398,7 +451,8 @@ function generateImage() {
     const maxHrSetting = Number($('#maxHrSetting').value);
     if (!title || !isValidPositiveNumber(ftp) || !isValidPositiveNumber(maxHrSetting)) return setStatus('タイトル、FTP、最大心拍数を入力してください。', true);
     const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
-    drawRideReport(state.metrics, { title, ftp, maxHrSetting, sp });
+    const powerAverageSeconds = getSelectedPowerAverageSeconds(state.metrics);
+    drawRideReport(state.metrics, { title, ftp, maxHrSetting, sp, powerAverageSeconds });
   }
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -818,7 +872,7 @@ function drawTabs() {
   });
 }
 
-function drawTimeline(metrics, { ftp, maxHrSetting }) {
+function drawTimeline(metrics, { ftp, maxHrSetting, powerAverageSeconds }) {
   const x = 27;
   const y = 195;
   const width = 948;
@@ -830,9 +884,8 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   ctx.clip();
   const maxSamples = width;
 
-  const d = metrics.duration;
-  const adaptiveWindow = d < 7200 ? 2 : d < 10800 ? 3 : d < 18000 ? 4 : 5;
-  const powers = downsampleSeries(rollingPower(metrics.records, adaptiveWindow), maxSamples);
+  const powerWindow = clampPowerAverageSeconds(powerAverageSeconds);
+  const powers = downsampleSeries(rollingPower(metrics.records, powerWindow), maxSamples);
   const maxDisplayedPower = powers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
   const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
 
@@ -845,9 +898,10 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
     ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
-  const step = adaptiveWindow - 2;
+  const step = Math.min(3, Math.max(0, powerWindow - 2));
   drawPowerLine(powers, x, y, width, height, maxGraphPower, 1.7 - step * 0.3, 3.6 - step * 0.8);
-  const hrs = downsampleSeries(rollingHeartRate(metrics.records, Math.max(3, adaptiveWindow)), maxSamples);
+  const heartWindow = Math.max(3, getDefaultPowerAverageSeconds(metrics));
+  const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
   drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
@@ -1228,4 +1282,5 @@ function roundedLeftRect(context, x, y, width, height, radius, fillStyle) {
   context.fill();
 }
 
+syncPowerAverageSliderDefault();
 drawPlaceholder();
