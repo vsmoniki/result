@@ -13,7 +13,6 @@ const state = {
   fileInputKey: null,
   autoRideTitle: '',
   isLoadingFile: false,
-  powerAverageSecondsTouched: false,
 };
 
 // Guard against duplicate activations while the native file picker is open.
@@ -28,9 +27,6 @@ const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = $('#fitFile');
 const fileDrop = $('#fileDrop');
-const powerAverageSlider = $('#powerAverageSeconds');
-const powerAverageValue = $('#powerAverageValue');
-const resetPowerAverageButton = $('#resetPowerAverage');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
@@ -54,15 +50,12 @@ $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
 $('#ftp').addEventListener('input', syncSp);
-powerAverageSlider.addEventListener('input', handlePowerAverageInput);
-resetPowerAverageButton.addEventListener('click', resetPowerAverageSeconds);
 
 function syncMode() {
   const mode = getMode();
   $('#finishInputs').classList.toggle('hidden', mode !== 'finish');
   $('#reportInputs').classList.toggle('hidden', mode !== 'report');
   clearGeneratedDownload();
-  syncPowerAverageSliderDefault();
   drawPlaceholder();
 }
 
@@ -149,7 +142,6 @@ async function processSelectedFile(file) {
     state.metrics = metrics;
     state.isLoadingFile = false;
     syncRideTitle(sourceData, file);
-    syncPowerAverageSliderDefault();
     syncSp();
     $('#generate').disabled = false;
     fileDrop.classList.add('has-file');
@@ -177,7 +169,6 @@ function beginFileSelection(file) {
   $('#fileName').textContent = file.name;
   clearGeneratedDownload();
   $('#generate').disabled = true;
-  syncPowerAverageSliderDefault();
   drawPlaceholder();
   return selectionToken;
 }
@@ -204,50 +195,6 @@ function handleRideTitleInput(event) {
   if (event.currentTarget.value !== state.autoRideTitle) {
     state.autoRideTitle = '';
   }
-}
-
-function handlePowerAverageInput() {
-  state.powerAverageSecondsTouched = true;
-  syncPowerAverageValue();
-  clearGeneratedDownload();
-  if (getMode() === 'report' && canGenerateImage()) generateImage();
-}
-
-function resetPowerAverageSeconds() {
-  state.powerAverageSecondsTouched = false;
-  syncPowerAverageSliderDefault();
-  clearGeneratedDownload();
-  if (getMode() === 'report' && canGenerateImage()) generateImage();
-}
-
-function syncPowerAverageSliderDefault() {
-  if (!state.powerAverageSecondsTouched) {
-    powerAverageSlider.value = getDefaultPowerAverageSeconds(state.metrics);
-  }
-  syncPowerAverageValue();
-}
-
-function syncPowerAverageValue() {
-  const seconds = getSelectedPowerAverageSeconds(state.metrics);
-  powerAverageValue.textContent = `${seconds}秒`;
-}
-
-function getSelectedPowerAverageSeconds(metrics) {
-  if (!state.powerAverageSecondsTouched) return getDefaultPowerAverageSeconds(metrics);
-  return clampPowerAverageSeconds(Number(powerAverageSlider.value));
-}
-
-function getDefaultPowerAverageSeconds(metrics) {
-  const duration = metrics?.duration ?? 0;
-  if (duration >= 18000) return 5;
-  if (duration >= 10800) return 4;
-  if (duration >= 7200) return 3;
-  return 2;
-}
-
-function clampPowerAverageSeconds(value) {
-  if (!Number.isFinite(value)) return 2;
-  return Math.max(1, Math.min(10, Math.round(value)));
 }
 
 function syncSp() {
@@ -451,8 +398,7 @@ function generateImage() {
     const maxHrSetting = Number($('#maxHrSetting').value);
     if (!title || !isValidPositiveNumber(ftp) || !isValidPositiveNumber(maxHrSetting)) return setStatus('タイトル、FTP、最大心拍数を入力してください。', true);
     const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
-    const powerAverageSeconds = getSelectedPowerAverageSeconds(state.metrics);
-    drawRideReport(state.metrics, { title, ftp, maxHrSetting, sp, powerAverageSeconds });
+    drawRideReport(state.metrics, { title, ftp, maxHrSetting, sp });
   }
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -614,45 +560,19 @@ function bestRollingAverage(records, seconds, field = 'power') {
   return best;
 }
 
-function rollingMetric(records, field, windowSeconds) {
-  const window = Math.max(1, Number(windowSeconds) || 1);
-  let sum = 0;
-  let validCount = 0;
-  let left = 0;
-
+function rollingMetric(records, field, windowSize) {
   return records.map((record, index) => {
-    const value = record[field];
-    if (Number.isFinite(value)) {
-      sum += value;
-      validCount += 1;
-    }
-
-    while (left < index && getRecordAgeSeconds(records[left], record, left, index) >= window) {
-      const leftValue = records[left][field];
-      if (Number.isFinite(leftValue)) {
-        sum -= leftValue;
-        validCount -= 1;
-      }
-      left += 1;
-    }
-
-    return validCount ? sum / validCount : NaN;
+    const from = Math.max(0, index - windowSize + 1);
+    return average(records.slice(from, index + 1).map((r) => r[field]));
   });
 }
 
-function getRecordAgeSeconds(olderRecord, newerRecord, olderIndex, newerIndex) {
-  if (Number.isFinite(olderRecord?.elapsed) && Number.isFinite(newerRecord?.elapsed)) {
-    return newerRecord.elapsed - olderRecord.elapsed;
-  }
-  return newerIndex - olderIndex;
+function rollingPower(records, windowSize = 2) {
+  return rollingMetric(records, 'power', windowSize).map((value) => value || 0);
 }
 
-function rollingPower(records, windowSeconds = 2) {
-  return rollingMetric(records, 'power', windowSeconds).map((value) => value || 0);
-}
-
-function rollingHeartRate(records, windowSeconds = 3) {
-  return rollingMetric(records, 'heartRate', windowSeconds).map((value) => value || NaN);
+function rollingHeartRate(records, windowSize = 3) {
+  return rollingMetric(records, 'heartRate', windowSize).map((value) => value || NaN);
 }
 
 function average(values) {
@@ -898,7 +818,7 @@ function drawTabs() {
   });
 }
 
-function drawTimeline(metrics, { ftp, maxHrSetting, powerAverageSeconds }) {
+function drawTimeline(metrics, { ftp, maxHrSetting }) {
   const x = 27;
   const y = 195;
   const width = 948;
@@ -910,10 +830,10 @@ function drawTimeline(metrics, { ftp, maxHrSetting, powerAverageSeconds }) {
   ctx.clip();
   const maxSamples = width;
 
-  const powerWindow = clampPowerAverageSeconds(powerAverageSeconds);
-  const smoothedPowers = rollingPower(metrics.records, powerWindow);
-  const powers = downsampleSeries(smoothedPowers, maxSamples, 'nearest');
-  const maxDisplayedPower = smoothedPowers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
+  const d = metrics.duration;
+  const adaptiveWindow = d < 7200 ? 2 : d < 10800 ? 3 : d < 18000 ? 4 : 5;
+  const powers = downsampleSeries(rollingPower(metrics.records, adaptiveWindow), maxSamples);
+  const maxDisplayedPower = powers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
   const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
 
   // Power bars with exact width (no overlap) to prevent color bleed
@@ -925,9 +845,9 @@ function drawTimeline(metrics, { ftp, maxHrSetting, powerAverageSeconds }) {
     ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
-  drawPowerLine(powers, x, y, width, height, maxGraphPower);
-  const heartWindow = Math.max(3, getDefaultPowerAverageSeconds(metrics));
-  const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
+  const step = adaptiveWindow - 2;
+  drawPowerLine(powers, x, y, width, height, maxGraphPower, 1.7 - step * 0.3, 3.6 - step * 0.8);
+  const hrs = downsampleSeries(rollingHeartRate(metrics.records, Math.max(3, adaptiveWindow)), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
   drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
@@ -984,17 +904,11 @@ function drawPowerLineStroke(values, x, y, width, height, max, color, lineWidth)
   ctx.stroke();
 }
 
-function downsampleSeries(values, maxPoints, strategy = 'average') {
+function downsampleSeries(values, maxPoints) {
   if (values.length <= maxPoints) return values;
   const result = [];
   const ratio = values.length / maxPoints;
   for (let i = 0; i < maxPoints; i++) {
-    if (strategy === 'nearest') {
-      const index = Math.min(values.length - 1, Math.floor((i + 0.5) * ratio));
-      result.push(values[index]);
-      continue;
-    }
-
     const start = Math.floor(i * ratio);
     const end = Math.min(values.length, Math.floor((i + 1) * ratio));
     const slice = values.slice(start, end).filter(Number.isFinite);
@@ -1314,5 +1228,4 @@ function roundedLeftRect(context, x, y, width, height, radius, fillStyle) {
   context.fill();
 }
 
-syncPowerAverageSliderDefault();
 drawPlaceholder();
