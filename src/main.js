@@ -230,9 +230,7 @@ function syncGraphSmoothnessSliderDefault() {
 
 function syncGraphSmoothnessValue() {
   const smoothness = getSelectedGraphSmoothness();
-  const powerWindow = getTimelinePowerAverageSeconds(state.metrics, smoothness);
-  const samplePercent = getTimelineSampleDensityPercent(smoothness);
-  graphSmoothnessValue.textContent = `${powerWindow}秒平均 / ${samplePercent}%`;
+  graphSmoothnessValue.textContent = `${smoothness}%`;
 }
 
 function getSelectedGraphSmoothness() {
@@ -272,9 +270,6 @@ function getTimelineSampleDensity(smoothness) {
   return 1 - amount ** 1.2 * 0.72;
 }
 
-function getTimelineSampleDensityPercent(smoothness) {
-  return Math.round(getTimelineSampleDensity(smoothness) * 100);
-}
 
 function clampGraphSmoothness(value) {
   if (!Number.isFinite(value)) return getDefaultGraphSmoothness();
