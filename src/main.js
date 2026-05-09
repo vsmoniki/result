@@ -247,7 +247,7 @@ function getDefaultPowerAverageSeconds(metrics) {
 
 function clampPowerAverageSeconds(value) {
   if (!Number.isFinite(value)) return 2;
-  return Math.max(1, Math.min(10, Math.round(value)));
+  return Math.max(1, Math.min(30, Math.round(value)));
 }
 
 function syncSp() {
