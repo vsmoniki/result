@@ -856,7 +856,10 @@ function drawTimeline(metrics, { ftp, maxHrSetting }) {
   const maxPowerIndex = powers.reduce((best, value, index) => value > powers[best] ? index : best, 0);
   const maxPowerX = x + (maxPowerIndex + 0.5) * (width / Math.max(1, powers.length));
   const maxPowerY = getPowerLineY(powers[maxPowerIndex], y, height, maxGraphPower);
-  drawPeakLabel(`${Math.round(powers[maxPowerIndex])}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22);
+  // Keep the graph shape/scaling based on the smoothed 2〜5秒平均 series,
+  // but show the maximum power label as the 1秒(raw record) peak.
+  const maxPowerLabelValue = metrics.maxPower || powers[maxPowerIndex] || 0;
+  drawPeakLabel(`${Math.round(maxPowerLabelValue)}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22);
   if (metrics.maxHeartRate) {
     const maxHrIndex = hrs.reduce((best, value, index) => (Number.isFinite(value) && value > (hrs[best] || 0)) ? index : best, 0);
     const maxHrX = x + (maxHrIndex / Math.max(1, hrs.length - 1)) * width;
