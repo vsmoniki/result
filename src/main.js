@@ -931,8 +931,8 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
     ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
-  const smoothnessWeight = clampGraphSmoothness(graphSmoothness) / 100;
-  drawPowerLine(powers, x, y, width, height, maxGraphPower, 1.7 - smoothnessWeight * 0.5, 3.6 - smoothnessWeight * 1.2);
+  const step = Math.min(3, Math.max(0, powerWindow - 2));
+  drawPowerLine(powers, x, y, width, height, maxGraphPower, 1.7 - step * 0.3, 3.6 - step * 0.8);
   const heartWindow = Math.max(3, getAutomaticTimelineAverageSeconds(metrics));
   const hrs = smoothGraphSeries(downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples), graphSmoothness);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
