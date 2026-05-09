@@ -912,7 +912,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting, powerAverageSeconds }) {
 
   const powerWindow = clampPowerAverageSeconds(powerAverageSeconds);
   const smoothedPowers = rollingPower(metrics.records, powerWindow);
-  const powers = downsampleSeries(smoothedPowers, maxSamples, 'nearest');
+  const powers = downsampleSeries(smoothedPowers, maxSamples);
   const maxDisplayedPower = smoothedPowers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
   const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
 
