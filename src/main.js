@@ -925,8 +925,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting, powerAverageSeconds }) {
     ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
-  const step = Math.min(3, Math.max(0, powerWindow - 2));
-  drawPowerLine(powers, x, y, width, height, maxGraphPower, 1.7 - step * 0.3, 3.6 - step * 0.8);
+  drawPowerLine(powers, x, y, width, height, maxGraphPower);
   const heartWindow = Math.max(3, getDefaultPowerAverageSeconds(metrics));
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
