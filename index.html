@@ -42,16 +42,16 @@
             <label>FTP（W）<input id="ftp" type="number" min="1" step="1" required /></label>
             <label>最大心拍数（bpm）<input id="maxHrSetting" type="number" min="80" step="1" required /></label>
             <label>SP<input id="spInput" type="number" min="0" step="1" /></label>
-            <div class="power-average-control">
-              <div class="power-average-header">
-                <label for="powerAverageSeconds">パワーグラフ平均秒数</label>
-                <strong id="powerAverageValue">2秒</strong>
+            <div class="graph-smoothness-control">
+              <div class="graph-smoothness-header">
+                <label for="graphSmoothness">グラフの滑らかさ</label>
+                <strong id="graphSmoothnessValue">60%</strong>
               </div>
-              <input id="powerAverageSeconds" type="range" min="1" max="30" step="1" value="2" />
-              <div class="power-average-footer">
-                <span>1秒</span>
-                <button id="resetPowerAverage" class="secondary-button" type="button">デフォルトに戻す</button>
-                <span>30秒</span>
+              <input id="graphSmoothness" type="range" min="0" max="100" step="1" value="60" />
+              <div class="graph-smoothness-footer">
+                <span>シャープ</span>
+                <button id="resetGraphSmoothness" class="secondary-button" type="button">デフォルトに戻す</button>
+                <span>なめらか</span>
               </div>
             </div>
           </div>
