@@ -918,7 +918,8 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
   const averagedPowers = rollingPower(metrics.records, powerWindow);
   const powers = smoothGraphSeries(downsampleSeries(averagedPowers, maxSamples), graphSmoothness);
   const maxDisplayedPower = averagedPowers.reduce((max, p) => (Number.isFinite(p) && p > max ? p : max), 0);
-  const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
+  const maxPowerPeak = findMaxPowerRecord(metrics.records);
+  const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, maxPowerPeak?.power || 0, 1);
 
   // Power bars with exact width (no overlap) to prevent color bleed
   const barW = width / Math.max(1, powers.length);
@@ -938,19 +939,48 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
   drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
   ctx.restore();
 
-  const maxPowerIndex = powers.reduce((best, value, index) => value > powers[best] ? index : best, 0);
-  const maxPowerX = x + (maxPowerIndex + 0.5) * (width / Math.max(1, powers.length));
-  const maxPowerY = getPowerLineY(powers[maxPowerIndex], y, height, maxGraphPower);
-  // Keep the graph shape/scaling based on the automatically averaged and visually smoothed series,
-  // but show the maximum power label as the 1秒(raw record) peak.
-  const maxPowerLabelValue = metrics.maxPower || powers[maxPowerIndex] || 0;
-  drawPeakLabel(`${Math.round(maxPowerLabelValue)}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22);
+  if (maxPowerPeak) {
+    const maxPowerX = getTimelineRecordX(maxPowerPeak.record, metrics.records, x, width);
+    const maxPowerY = getPowerLineY(maxPowerPeak.power, y, height, maxGraphPower);
+    drawPeakLabel(`${Math.round(maxPowerPeak.power)}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22);
+  }
   if (metrics.maxHeartRate) {
     const maxHrIndex = hrs.reduce((best, value, index) => (Number.isFinite(value) && value > (hrs[best] || 0)) ? index : best, 0);
     const maxHrX = x + (maxHrIndex / Math.max(1, hrs.length - 1)) * width;
     const maxHrY = getSeriesY(hrs[maxHrIndex], y + 28, height - 84, heartLineMax, heartLineMin);
     drawPeakLabel(`${Math.round(hrs[maxHrIndex])}bpm`, maxHrX, maxHrY - 16, '#fff', '#e11f28', y + 16, y + height - 22);
   }
+}
+
+
+function findMaxPowerRecord(records) {
+  let peak = null;
+  records.forEach((record, index) => {
+    if (!Number.isFinite(record?.power)) return;
+    if (!peak || record.power > peak.power) {
+      peak = { record, index, power: record.power };
+    }
+  });
+  return peak;
+}
+
+function getTimelineRecordX(record, records, x, width) {
+  if (!record || !records.length) return x;
+
+  const firstElapsed = records.find((item) => Number.isFinite(item?.elapsed))?.elapsed;
+  const lastElapsed = [...records].reverse().find((item) => Number.isFinite(item?.elapsed))?.elapsed;
+  if (Number.isFinite(record.elapsed) && Number.isFinite(firstElapsed) && Number.isFinite(lastElapsed) && lastElapsed > firstElapsed) {
+    const progress = (record.elapsed - firstElapsed) / (lastElapsed - firstElapsed);
+    return x + clamp01(progress) * width;
+  }
+
+  const index = Math.max(0, records.indexOf(record));
+  return x + (index / Math.max(1, records.length - 1)) * width;
+}
+
+function clamp01(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
 }
 
 function getSeriesY(value, y, height, max, min = 0) {
