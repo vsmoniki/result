@@ -42,6 +42,7 @@ const powerGraphHeightSlider = $('#powerGraphHeight');
 const powerGraphHeightValue = $('#powerGraphHeightValue');
 const graphLineWidthSlider = $('#graphLineWidth');
 const graphLineWidthValue = $('#graphLineWidthValue');
+const resetOptionsButton = $('#resetOptions');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
@@ -68,6 +69,7 @@ $('#ftp').addEventListener('input', syncSp);
 graphSmoothnessSlider.addEventListener('input', handleGraphSmoothnessInput);
 powerGraphHeightSlider.addEventListener('input', handlePowerGraphHeightInput);
 graphLineWidthSlider.addEventListener('input', handleGraphLineWidthInput);
+resetOptionsButton.addEventListener('click', resetOptionsToDefaults);
 
 function syncMode() {
   const mode = getMode();
@@ -241,6 +243,17 @@ function handlePowerGraphHeightInput() {
 function handleGraphLineWidthInput() {
   state.graphLineWidthTouched = true;
   syncGraphLineWidthValue();
+  clearGeneratedDownload();
+  if (getMode() === 'report' && canGenerateImage()) generateImage();
+}
+
+function resetOptionsToDefaults() {
+  state.graphSmoothnessTouched = false;
+  state.powerGraphHeightTouched = false;
+  state.graphLineWidthTouched = false;
+  syncGraphSmoothnessSliderDefault();
+  syncPowerGraphHeightSliderDefault();
+  syncGraphLineWidthSliderDefault();
   clearGeneratedDownload();
   if (getMode() === 'report' && canGenerateImage()) generateImage();
 }
