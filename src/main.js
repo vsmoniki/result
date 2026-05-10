@@ -335,6 +335,14 @@ function getGraphLineWidthMultiplier(lineWidth) {
   return 1 + clampGraphLineWidth(lineWidth) / 100;
 }
 
+function getDurationBasedGraphLineWidths(metrics) {
+  const step = Math.min(3, Math.max(0, getAutomaticTimelineAverageSeconds(metrics) - 2));
+  return {
+    lineWidth: 1.7 - step * 0.3,
+    shadowWidth: 3.6 - step * 0.8,
+  };
+}
+
 function formatSignedPercent(value) {
   const rounded = Math.round(value);
   return `${rounded > 0 ? '+' : ''}${rounded}%`;
@@ -1088,9 +1096,8 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
     ctx.fillRect(barX, y + height - barH, Math.max(1, nextBarX - barX), barH);
   });
   ctx.globalAlpha = 1;
-  const baseLineWidth = 1.7;
-  const baseShadowWidth = 3.6;
-  // Keep timeline leveling independent from white-line thickness; only this option scales it.
+  const { lineWidth: baseLineWidth, shadowWidth: baseShadowWidth } = getDurationBasedGraphLineWidths(metrics);
+  // Keep smoothing independent from white-line thickness while preserving the duration-based default.
   const lineWidthMultiplier = getGraphLineWidthMultiplier(graphLineWidth);
   drawPowerLine(
     powers,
