@@ -27,6 +27,7 @@ const DEFAULT_CANVAS_HEIGHT = 1080;
 const LEGACY_GRAPH_SMOOTHNESS = 0;
 const DEFAULT_POWER_GRAPH_HEIGHT = 0;
 const DEFAULT_GRAPH_LINE_WIDTH = 0;
+const HEART_LINE_AMPLITUDE_SCALE = 0.9;
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const canvas = $('#canvas');
@@ -1061,9 +1062,20 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
-  const heartLineY = y + 34;
-  const heartLineHeight = height - 96;
-  drawSeries(hrs, x, heartLineY, width, heartLineHeight, heartLineMax, '#e51f23', 1.7, heartLineMin);
+  const heartLineY = y + 28;
+  const heartLineHeight = height - 84;
+  drawSeries(
+    hrs,
+    x,
+    heartLineY,
+    width,
+    heartLineHeight,
+    heartLineMax,
+    '#e51f23',
+    1.7,
+    heartLineMin,
+    HEART_LINE_AMPLITUDE_SCALE,
+  );
 
   ctx.restore();
 
@@ -1082,7 +1094,14 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
   if (maxHeartRatePeak) {
     const hrDownsampledIndex = Math.min(hrs.length - 1, Math.floor(maxHeartRatePeak.index * hrs.length / metrics.records.length));
     const maxHrX = x + (hrDownsampledIndex / Math.max(1, hrs.length - 1)) * width;
-    const maxHrY = getSeriesY(maxHeartRatePeak.heartRate, heartLineY, heartLineHeight, heartLineMax, heartLineMin);
+    const maxHrY = getSeriesY(
+      maxHeartRatePeak.heartRate,
+      heartLineY,
+      heartLineHeight,
+      heartLineMax,
+      heartLineMin,
+      HEART_LINE_AMPLITUDE_SCALE,
+    );
     drawPeakLabel(`${Math.round(maxHeartRatePeak.heartRate)}bpm`, maxHrX, maxHrY - 16, '#fff', '#e11f28', y + 16, y + height - 22);
   }
 }
@@ -1130,8 +1149,10 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
-function getSeriesY(value, y, height, max, min = 0) {
-  return y + height - ((value - min) / Math.max(1, max - min)) * height;
+function getSeriesY(value, y, height, max, min = 0, amplitudeScale = 1) {
+  const rawY = y + height - ((value - min) / Math.max(1, max - min)) * height;
+  const centerY = y + height / 2;
+  return centerY + (rawY - centerY) * amplitudeScale;
 }
 
 function getPowerLineY(value, y, height, max, drawHeight = height - 58) {
@@ -1191,7 +1212,7 @@ function downsampleSeries(values, maxPoints, strategy = 'average') {
   return result;
 }
 
-function drawSeries(values, x, y, width, height, max, color, lineWidth, min = 0) {
+function drawSeries(values, x, y, width, height, max, color, lineWidth, min = 0, amplitudeScale = 1) {
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
@@ -1199,7 +1220,7 @@ function drawSeries(values, x, y, width, height, max, color, lineWidth, min = 0)
   values.forEach((value, index) => {
     if (!Number.isFinite(value)) return;
     const px = x + (index / Math.max(1, values.length - 1)) * width;
-    const py = y + height - ((value - min) / Math.max(1, max - min)) * height;
+    const py = getSeriesY(value, y, height, max, min, amplitudeScale);
     if (!started) {
       ctx.moveTo(px, py);
       started = true;
