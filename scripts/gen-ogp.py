@@ -44,26 +44,19 @@ d.ellipse(
     outline=(255, 106, 0, 50), width=1
 )
 
-# --- fonts (Japanese-capable, prioritise IPA Gothic) ---
+# --- fonts (Noto Sans CJK JP, index 0 = JP) ---
 def load_font(size, bold=False):
+    weight = "Bold" if bold else "Regular"
     candidates = [
-        # NotoSansCJK (bold variant used for both weights since IPA has no bold)
-        f"/usr/share/fonts/truetype/noto/NotoSansCJK-{'Bold' if bold else 'Regular'}.ttc",
-        f"/usr/share/fonts/opentype/noto/NotoSansCJK-{'Bold' if bold else 'Regular'}.ttc",
-        # IPA Gothic – full Japanese coverage
-        "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
-        "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",
-        # WenQuanYi – CJK coverage
-        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-        # Latin fallbacks
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        (f"/usr/share/fonts/opentype/noto/NotoSansCJK-{weight}.ttc", 0),
+        (f"/usr/share/fonts/truetype/noto/NotoSansCJK-{weight}.ttc", 0),
+        ("/usr/share/fonts/truetype/fonts-japanese-gothic.ttf", 0),
+        ("/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf", 0),
+        ("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", 0),
     ]
-    for p in candidates:
-        if os.path.exists(p):
-            return ImageFont.truetype(p, size)
+    for path, index in candidates:
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size, index=index)
     return ImageFont.load_default()
 
 font_badge  = load_font(22, bold=True)
