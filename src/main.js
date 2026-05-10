@@ -1061,7 +1061,9 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
-  drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
+  const heartLineY = y + 34;
+  const heartLineHeight = height - 96;
+  drawSeries(hrs, x, heartLineY, width, heartLineHeight, heartLineMax, '#e51f23', 1.7, heartLineMin);
 
   ctx.restore();
 
@@ -1080,7 +1082,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
   if (maxHeartRatePeak) {
     const hrDownsampledIndex = Math.min(hrs.length - 1, Math.floor(maxHeartRatePeak.index * hrs.length / metrics.records.length));
     const maxHrX = x + (hrDownsampledIndex / Math.max(1, hrs.length - 1)) * width;
-    const maxHrY = getSeriesY(maxHeartRatePeak.heartRate, y + 28, height - 84, heartLineMax, heartLineMin);
+    const maxHrY = getSeriesY(maxHeartRatePeak.heartRate, heartLineY, heartLineHeight, heartLineMax, heartLineMin);
     drawPeakLabel(`${Math.round(maxHeartRatePeak.heartRate)}bpm`, maxHrX, maxHrY - 16, '#fff', '#e11f28', y + 16, y + height - 22);
   }
 }
