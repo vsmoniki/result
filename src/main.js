@@ -1043,6 +1043,9 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
   });
   ctx.globalAlpha = 1;
   const step = Math.min(3, Math.max(0, powerWindow - 2));
+  const baseLineWidth = 1.7 - step * 0.3;
+  const baseShadowWidth = 3.6 - step * 0.8;
+  // Keep the existing duration-dependent line thickness when the option is left at 0%.
   const lineWidthMultiplier = getGraphLineWidthMultiplier(graphLineWidth);
   drawPowerLine(
     powers,
@@ -1052,8 +1055,8 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
     height,
     maxGraphPower,
     powerGraphDrawHeight,
-    (1.7 - step * 0.3) * lineWidthMultiplier,
-    (3.6 - step * 0.8) * lineWidthMultiplier,
+    baseLineWidth * lineWidthMultiplier,
+    baseShadowWidth * lineWidthMultiplier,
   );
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
