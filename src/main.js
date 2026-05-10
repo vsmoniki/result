@@ -24,6 +24,8 @@ let pickerActivatedAt = 0;
 const PICKER_TIMEOUT_MS = 30_000;
 const DEFAULT_CANVAS_WIDTH = 1920;
 const DEFAULT_CANVAS_HEIGHT = 1080;
+const MIN_GRAPH_SMOOTHNESS = -20;
+const MAX_GRAPH_SMOOTHNESS = 100;
 const LEGACY_GRAPH_SMOOTHNESS = 0;
 const DEFAULT_POWER_GRAPH_HEIGHT = 0;
 const DEFAULT_GRAPH_LINE_WIDTH = 0;
@@ -252,7 +254,7 @@ function syncGraphSmoothnessSliderDefault() {
 
 function syncGraphSmoothnessValue() {
   const smoothness = getSelectedGraphSmoothness();
-  graphSmoothnessValue.textContent = `${smoothness}%`;
+  graphSmoothnessValue.textContent = formatSignedPercent(smoothness);
 }
 
 function getSelectedGraphSmoothness() {
@@ -336,27 +338,47 @@ function getAutomaticTimelineAverageSeconds(metrics) {
 function getTimelineLevelingConfig(metrics, smoothness, graphWidth) {
   const powerWindow = getTimelinePowerAverageSeconds(metrics, smoothness);
   const heartWindow = Math.max(3, Math.round(powerWindow * 1.25));
-  const sampleDensity = getTimelineSampleDensity(smoothness);
-  const maxSamples = Math.max(120, Math.round(graphWidth * sampleDensity));
+  const maxSamples = getTimelineMaxSamples(metrics, smoothness, graphWidth);
   return { powerWindow, heartWindow, maxSamples };
 }
 
 function getTimelinePowerAverageSeconds(metrics, smoothness) {
   const baseWindow = getAutomaticTimelineAverageSeconds(metrics);
-  const amount = clampGraphSmoothness(smoothness) / 100;
+  const clampedSmoothness = clampGraphSmoothness(smoothness);
+  if (clampedSmoothness < 0) {
+    const detailAmount = (clampedSmoothness - MIN_GRAPH_SMOOTHNESS) / (LEGACY_GRAPH_SMOOTHNESS - MIN_GRAPH_SMOOTHNESS);
+    return Math.max(1, Math.round(1 + detailAmount * (baseWindow - 1)));
+  }
+
+  const amount = clampedSmoothness / MAX_GRAPH_SMOOTHNESS;
   const maxWindow = 30;
   return Math.min(maxWindow, baseWindow + Math.round(amount ** 1.15 * (maxWindow - baseWindow)));
 }
 
+function getTimelineMaxSamples(metrics, smoothness, graphWidth) {
+  const recordCount = metrics?.records?.length ?? 0;
+  const clampedSmoothness = clampGraphSmoothness(smoothness);
+  if (clampedSmoothness <= MIN_GRAPH_SMOOTHNESS) return Math.max(1, recordCount);
+
+  const sampleDensity = getTimelineSampleDensity(clampedSmoothness);
+  return Math.max(120, Math.round(graphWidth * sampleDensity));
+}
+
 function getTimelineSampleDensity(smoothness) {
-  const amount = clampGraphSmoothness(smoothness) / 100;
+  const clampedSmoothness = clampGraphSmoothness(smoothness);
+  if (clampedSmoothness < 0) {
+    const detailAmount = (clampedSmoothness - MIN_GRAPH_SMOOTHNESS) / (LEGACY_GRAPH_SMOOTHNESS - MIN_GRAPH_SMOOTHNESS);
+    return 1 + (1 - detailAmount);
+  }
+
+  const amount = clampedSmoothness / MAX_GRAPH_SMOOTHNESS;
   return 1 - amount ** 1.2 * 0.72;
 }
 
 
 function clampGraphSmoothness(value) {
   if (!Number.isFinite(value)) return getDefaultGraphSmoothness();
-  return Math.max(0, Math.min(100, Math.round(value)));
+  return Math.max(MIN_GRAPH_SMOOTHNESS, Math.min(MAX_GRAPH_SMOOTHNESS, Math.round(value)));
 }
 
 function syncSp() {
