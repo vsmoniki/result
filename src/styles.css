@@ -333,6 +333,35 @@ button:disabled {
   margin: 0 14px 14px;
 }
 
+
+.support-footer {
+  width: min(1480px, calc(100% - 32px));
+  margin: -28px auto 42px;
+  text-align: center;
+}
+
+.support-footer a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 1px solid rgba(255, 178, 26, .38);
+  border-radius: 999px;
+  padding: 10px 20px;
+  color: #fff7df;
+  background: rgba(255, 178, 26, .12);
+  font-weight: 950;
+  text-decoration: none;
+  box-shadow: 0 12px 30px rgba(255, 178, 26, .12);
+}
+
+.support-footer a:hover,
+.support-footer a:focus-visible {
+  border-color: #ffb21a;
+  background: rgba(255, 178, 26, .22);
+  outline: none;
+}
+
 canvas {
   display: block;
   width: 100%;
@@ -368,6 +397,11 @@ canvas {
 
   .hero {
     margin-bottom: 14px;
+  }
+
+  .support-footer {
+    width: min(100%, calc(100% - 18px));
+    margin: -12px auto 28px;
   }
 
   .eyebrow {
