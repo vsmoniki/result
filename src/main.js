@@ -1082,10 +1082,9 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
     ctx.fillRect(barX, y + height - barH, Math.max(1, nextBarX - barX), barH);
   });
   ctx.globalAlpha = 1;
-  const step = Math.min(3, Math.max(0, powerWindow - 2));
-  const baseLineWidth = 1.7 - step * 0.3;
-  const baseShadowWidth = 3.6 - step * 0.8;
-  // Keep the existing duration-dependent line thickness when the option is left at 0%.
+  const baseLineWidth = 1.7;
+  const baseShadowWidth = 3.6;
+  // Keep timeline leveling independent from white-line thickness; only this option scales it.
   const lineWidthMultiplier = getGraphLineWidthMultiplier(graphLineWidth);
   drawPowerLine(
     powers,
