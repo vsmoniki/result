@@ -14,6 +14,7 @@ const state = {
   autoRideTitle: '',
   isLoadingFile: false,
   graphSmoothnessTouched: false,
+  powerGraphHeightTouched: false,
 };
 
 // Guard against duplicate activations while the native file picker is open.
@@ -23,6 +24,7 @@ const PICKER_TIMEOUT_MS = 30_000;
 const DEFAULT_CANVAS_WIDTH = 1920;
 const DEFAULT_CANVAS_HEIGHT = 1080;
 const LEGACY_GRAPH_SMOOTHNESS = 0;
+const DEFAULT_POWER_GRAPH_HEIGHT = 0;
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const canvas = $('#canvas');
@@ -31,6 +33,8 @@ const fileInput = $('#fitFile');
 const fileDrop = $('#fileDrop');
 const graphSmoothnessSlider = $('#graphSmoothness');
 const graphSmoothnessValue = $('#graphSmoothnessValue');
+const powerGraphHeightSlider = $('#powerGraphHeight');
+const powerGraphHeightValue = $('#powerGraphHeightValue');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
@@ -55,6 +59,7 @@ $('#download').addEventListener('click', savePng);
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
 $('#ftp').addEventListener('input', syncSp);
 graphSmoothnessSlider.addEventListener('input', handleGraphSmoothnessInput);
+powerGraphHeightSlider.addEventListener('input', handlePowerGraphHeightInput);
 
 function syncMode() {
   const mode = getMode();
@@ -62,6 +67,7 @@ function syncMode() {
   $('#reportInputs').classList.toggle('hidden', mode !== 'report');
   clearGeneratedDownload();
   syncGraphSmoothnessSliderDefault();
+  syncPowerGraphHeightSliderDefault();
   drawPlaceholder();
 }
 
@@ -149,6 +155,7 @@ async function processSelectedFile(file) {
     state.isLoadingFile = false;
     syncRideTitle(sourceData, file);
     syncGraphSmoothnessSliderDefault();
+    syncPowerGraphHeightSliderDefault();
     syncSp();
     $('#generate').disabled = false;
     fileDrop.classList.add('has-file');
@@ -212,6 +219,13 @@ function handleGraphSmoothnessInput() {
   if (getMode() === 'report' && canGenerateImage()) generateImage();
 }
 
+function handlePowerGraphHeightInput() {
+  state.powerGraphHeightTouched = true;
+  syncPowerGraphHeightValue();
+  clearGeneratedDownload();
+  if (getMode() === 'report' && canGenerateImage()) generateImage();
+}
+
 function syncGraphSmoothnessSliderDefault() {
   if (!state.graphSmoothnessTouched) {
     graphSmoothnessSlider.value = getDefaultGraphSmoothness();
@@ -231,6 +245,37 @@ function getSelectedGraphSmoothness() {
 
 function getDefaultGraphSmoothness() {
   return LEGACY_GRAPH_SMOOTHNESS;
+}
+
+function syncPowerGraphHeightSliderDefault() {
+  if (!state.powerGraphHeightTouched) {
+    powerGraphHeightSlider.value = getDefaultPowerGraphHeight();
+  }
+  syncPowerGraphHeightValue();
+}
+
+function syncPowerGraphHeightValue() {
+  const height = getSelectedPowerGraphHeight();
+  powerGraphHeightValue.textContent = formatSignedPercent(height);
+}
+
+function getSelectedPowerGraphHeight() {
+  if (!state.powerGraphHeightTouched) return getDefaultPowerGraphHeight();
+  return clampPowerGraphHeight(Number(powerGraphHeightSlider.value));
+}
+
+function getDefaultPowerGraphHeight() {
+  return DEFAULT_POWER_GRAPH_HEIGHT;
+}
+
+function clampPowerGraphHeight(value) {
+  if (!Number.isFinite(value)) return getDefaultPowerGraphHeight();
+  return Math.max(-50, Math.min(50, Math.round(value)));
+}
+
+function formatSignedPercent(value) {
+  const rounded = Math.round(value);
+  return `${rounded > 0 ? '+' : ''}${rounded}%`;
 }
 
 function getAutomaticTimelineAverageSeconds(metrics) {
@@ -470,7 +515,8 @@ function generateImage() {
     if (!title || !isValidPositiveNumber(ftp) || !isValidLevel(level) || !isValidPositiveNumber(maxHrSetting)) return setStatus('タイトル、FTP、レベル、最大心拍数を入力してください。', true);
     const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
     const graphSmoothness = getSelectedGraphSmoothness();
-    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, graphSmoothness });
+    const powerGraphHeight = getSelectedPowerGraphHeight();
+    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, graphSmoothness, powerGraphHeight });
   }
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -921,7 +967,7 @@ function drawTabs() {
   });
 }
 
-function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
+function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphHeight }) {
   const x = 27;
   const y = 195;
   const width = 948;
@@ -941,15 +987,16 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
 
   // Power bars with exact width (no overlap) to prevent color bleed
   const barW = width / Math.max(1, powers.length);
+  const powerGraphDrawHeight = getPowerGraphDrawHeight(height, powerGraphHeight);
   powers.forEach((p, index) => {
-    const barH = Math.min(height - 5, (p / maxGraphPower) * (height - 58));
+    const barH = Math.min(height - 5, (p / maxGraphPower) * powerGraphDrawHeight);
     ctx.fillStyle = zoneColor(p, ftp);
     ctx.globalAlpha = 0.82;
     ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
   ctx.globalAlpha = 1;
   const step = Math.min(3, Math.max(0, powerWindow - 2));
-  drawPowerLine(powers, x, y, width, height, maxGraphPower, 1.7 - step * 0.3, 3.6 - step * 0.8);
+  drawPowerLine(powers, x, y, width, height, maxGraphPower, powerGraphDrawHeight, 1.7 - step * 0.3, 3.6 - step * 0.8);
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
@@ -960,7 +1007,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness }) {
   if (maxDisplayedPower > 0) {
     const peakDownsampledIndex = Math.min(powers.length - 1, Math.floor(maxDisplayedPowerIndex * powers.length / averagedPowers.length));
     const maxPowerX = x + (peakDownsampledIndex + 0.5) * (width / Math.max(1, powers.length));
-    const maxPowerY = getPowerLineY(maxDisplayedPower, y, height, maxGraphPower);
+    const maxPowerY = getPowerLineY(maxDisplayedPower, y, height, maxGraphPower, powerGraphDrawHeight);
     const centerElapsed = metrics.records[maxDisplayedPowerIndex]?.elapsed;
     const peakOneSec = metrics.records.reduce((max, record) => {
       if (!Number.isFinite(record.power) || !Number.isFinite(record.elapsed) || !Number.isFinite(centerElapsed)) return max;
@@ -1024,20 +1071,26 @@ function getSeriesY(value, y, height, max, min = 0) {
   return y + height - ((value - min) / Math.max(1, max - min)) * height;
 }
 
-function getPowerLineY(value, y, height, max) {
-  return y + height - (value / Math.max(1, max)) * (height - 58);
+function getPowerLineY(value, y, height, max, drawHeight = height - 58) {
+  return y + height - (value / Math.max(1, max)) * drawHeight;
 }
 
-function drawPowerLine(values, x, y, width, height, max, lineWidth = 1.7, shadowWidth = 3.6) {
+function getPowerGraphDrawHeight(height, powerGraphHeight) {
+  const baseHeight = height - 58;
+  const multiplier = 1 + clampPowerGraphHeight(powerGraphHeight) / 100;
+  return Math.max(height * 0.2, Math.min(height - 5, baseHeight * multiplier));
+}
+
+function drawPowerLine(values, x, y, width, height, max, drawHeight = height - 58, lineWidth = 1.7, shadowWidth = 3.6) {
   ctx.save();
   ctx.lineCap = 'butt';
   ctx.lineJoin = 'miter';
-  drawPowerLineStroke(values, x, y, width, height, max, 'rgba(45,45,45,.5)', shadowWidth);
-  drawPowerLineStroke(values, x, y, width, height, max, '#f8f8f2', lineWidth);
+  drawPowerLineStroke(values, x, y, width, height, max, drawHeight, 'rgba(45,45,45,.5)', shadowWidth);
+  drawPowerLineStroke(values, x, y, width, height, max, drawHeight, '#f8f8f2', lineWidth);
   ctx.restore();
 }
 
-function drawPowerLineStroke(values, x, y, width, height, max, color, lineWidth) {
+function drawPowerLineStroke(values, x, y, width, height, max, drawHeight, color, lineWidth) {
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
@@ -1045,7 +1098,7 @@ function drawPowerLineStroke(values, x, y, width, height, max, color, lineWidth)
   values.forEach((value, index) => {
     if (!Number.isFinite(value)) return;
     const px = x + (index + 0.5) * (width / Math.max(1, values.length));
-    const py = getPowerLineY(value, y, height, max);
+    const py = getPowerLineY(value, y, height, max, drawHeight);
     if (!started) {
       ctx.moveTo(px, py);
       started = true;
@@ -1387,4 +1440,5 @@ function roundedLeftRect(context, x, y, width, height, radius, fillStyle) {
 }
 
 syncGraphSmoothnessSliderDefault();
+syncPowerGraphHeightSliderDefault();
 drawPlaceholder();

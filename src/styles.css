@@ -177,7 +177,7 @@ h1 {
   grid-column: 1 / -1;
 }
 
-.graph-smoothness-control {
+.option-slider-control {
   display: grid;
   gap: 8px;
   padding: 12px 14px;
@@ -187,25 +187,29 @@ h1 {
 }
 
 .graph-smoothness-header,
-.graph-smoothness-footer {
+.graph-smoothness-footer,
+.option-slider-header,
+.option-slider-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.graph-smoothness-header label {
+.graph-smoothness-header label,
+.option-slider-header label {
   color: #b9c9d8;
   font-size: .93rem;
   font-weight: 800;
 }
 
-.graph-smoothness-header strong {
+.graph-smoothness-header strong,
+.option-slider-header strong {
   color: #fff;
   font-weight: 950;
 }
 
-.graph-smoothness-control input[type="range"] {
+.option-slider-control input[type="range"] {
   width: 100%;
   border: 0;
   padding: 0;
@@ -213,7 +217,8 @@ h1 {
   accent-color: #ff5b1a;
 }
 
-.graph-smoothness-footer {
+.graph-smoothness-footer,
+.option-slider-footer {
   color: #b9c9d8;
   font-size: .8rem;
   font-weight: 800;
@@ -329,7 +334,7 @@ button:disabled {
   content: '−';
 }
 
-.preview-options .graph-smoothness-control {
+.preview-options .option-slider-control {
   margin: 0 14px 14px;
 }
 
@@ -511,7 +516,7 @@ canvas {
     padding: 11px 12px;
   }
 
-  .preview-options .graph-smoothness-control {
+  .preview-options .option-slider-control {
     margin: 0 10px 10px;
   }
 }
