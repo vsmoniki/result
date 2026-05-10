@@ -15,6 +15,7 @@ const state = {
   isLoadingFile: false,
   graphSmoothnessTouched: false,
   powerGraphHeightTouched: false,
+  graphLineWidthTouched: false,
 };
 
 // Guard against duplicate activations while the native file picker is open.
@@ -23,8 +24,12 @@ let pickerActivatedAt = 0;
 const PICKER_TIMEOUT_MS = 30_000;
 const DEFAULT_CANVAS_WIDTH = 1920;
 const DEFAULT_CANVAS_HEIGHT = 1080;
+const MIN_GRAPH_SMOOTHNESS = -20;
+const MAX_GRAPH_SMOOTHNESS = 100;
 const LEGACY_GRAPH_SMOOTHNESS = 0;
 const DEFAULT_POWER_GRAPH_HEIGHT = 0;
+const DEFAULT_GRAPH_LINE_WIDTH = 0;
+const HEART_LINE_AMPLITUDE_SCALE = 0.9;
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const canvas = $('#canvas');
@@ -35,6 +40,8 @@ const graphSmoothnessSlider = $('#graphSmoothness');
 const graphSmoothnessValue = $('#graphSmoothnessValue');
 const powerGraphHeightSlider = $('#powerGraphHeight');
 const powerGraphHeightValue = $('#powerGraphHeightValue');
+const graphLineWidthSlider = $('#graphLineWidth');
+const graphLineWidthValue = $('#graphLineWidthValue');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
@@ -60,6 +67,7 @@ $('#rideTitle').addEventListener('input', handleRideTitleInput);
 $('#ftp').addEventListener('input', syncSp);
 graphSmoothnessSlider.addEventListener('input', handleGraphSmoothnessInput);
 powerGraphHeightSlider.addEventListener('input', handlePowerGraphHeightInput);
+graphLineWidthSlider.addEventListener('input', handleGraphLineWidthInput);
 
 function syncMode() {
   const mode = getMode();
@@ -68,6 +76,7 @@ function syncMode() {
   clearGeneratedDownload();
   syncGraphSmoothnessSliderDefault();
   syncPowerGraphHeightSliderDefault();
+  syncGraphLineWidthSliderDefault();
   drawPlaceholder();
 }
 
@@ -156,6 +165,7 @@ async function processSelectedFile(file) {
     syncRideTitle(sourceData, file);
     syncGraphSmoothnessSliderDefault();
     syncPowerGraphHeightSliderDefault();
+    syncGraphLineWidthSliderDefault();
     syncSp();
     $('#generate').disabled = false;
     fileDrop.classList.add('has-file');
@@ -184,6 +194,8 @@ function beginFileSelection(file) {
   clearGeneratedDownload();
   $('#generate').disabled = true;
   syncGraphSmoothnessSliderDefault();
+  syncPowerGraphHeightSliderDefault();
+  syncGraphLineWidthSliderDefault();
   drawPlaceholder();
   return selectionToken;
 }
@@ -226,6 +238,13 @@ function handlePowerGraphHeightInput() {
   if (getMode() === 'report' && canGenerateImage()) generateImage();
 }
 
+function handleGraphLineWidthInput() {
+  state.graphLineWidthTouched = true;
+  syncGraphLineWidthValue();
+  clearGeneratedDownload();
+  if (getMode() === 'report' && canGenerateImage()) generateImage();
+}
+
 function syncGraphSmoothnessSliderDefault() {
   if (!state.graphSmoothnessTouched) {
     graphSmoothnessSlider.value = getDefaultGraphSmoothness();
@@ -235,7 +254,7 @@ function syncGraphSmoothnessSliderDefault() {
 
 function syncGraphSmoothnessValue() {
   const smoothness = getSelectedGraphSmoothness();
-  graphSmoothnessValue.textContent = `${smoothness}%`;
+  graphSmoothnessValue.textContent = formatSignedPercent(smoothness);
 }
 
 function getSelectedGraphSmoothness() {
@@ -273,6 +292,36 @@ function clampPowerGraphHeight(value) {
   return Math.max(-50, Math.min(50, Math.round(value)));
 }
 
+function syncGraphLineWidthSliderDefault() {
+  if (!state.graphLineWidthTouched) {
+    graphLineWidthSlider.value = getDefaultGraphLineWidth();
+  }
+  syncGraphLineWidthValue();
+}
+
+function syncGraphLineWidthValue() {
+  const lineWidth = getSelectedGraphLineWidth();
+  graphLineWidthValue.textContent = formatSignedPercent(lineWidth);
+}
+
+function getSelectedGraphLineWidth() {
+  if (!state.graphLineWidthTouched) return getDefaultGraphLineWidth();
+  return clampGraphLineWidth(Number(graphLineWidthSlider.value));
+}
+
+function getDefaultGraphLineWidth() {
+  return DEFAULT_GRAPH_LINE_WIDTH;
+}
+
+function clampGraphLineWidth(value) {
+  if (!Number.isFinite(value)) return getDefaultGraphLineWidth();
+  return Math.max(-50, Math.min(150, Math.round(value)));
+}
+
+function getGraphLineWidthMultiplier(lineWidth) {
+  return 1 + clampGraphLineWidth(lineWidth) / 100;
+}
+
 function formatSignedPercent(value) {
   const rounded = Math.round(value);
   return `${rounded > 0 ? '+' : ''}${rounded}%`;
@@ -289,27 +338,47 @@ function getAutomaticTimelineAverageSeconds(metrics) {
 function getTimelineLevelingConfig(metrics, smoothness, graphWidth) {
   const powerWindow = getTimelinePowerAverageSeconds(metrics, smoothness);
   const heartWindow = Math.max(3, Math.round(powerWindow * 1.25));
-  const sampleDensity = getTimelineSampleDensity(smoothness);
-  const maxSamples = Math.max(120, Math.round(graphWidth * sampleDensity));
+  const maxSamples = getTimelineMaxSamples(metrics, smoothness, graphWidth);
   return { powerWindow, heartWindow, maxSamples };
 }
 
 function getTimelinePowerAverageSeconds(metrics, smoothness) {
   const baseWindow = getAutomaticTimelineAverageSeconds(metrics);
-  const amount = clampGraphSmoothness(smoothness) / 100;
+  const clampedSmoothness = clampGraphSmoothness(smoothness);
+  if (clampedSmoothness < 0) {
+    const detailAmount = (clampedSmoothness - MIN_GRAPH_SMOOTHNESS) / (LEGACY_GRAPH_SMOOTHNESS - MIN_GRAPH_SMOOTHNESS);
+    return Math.max(1, Math.round(1 + detailAmount * (baseWindow - 1)));
+  }
+
+  const amount = clampedSmoothness / MAX_GRAPH_SMOOTHNESS;
   const maxWindow = 30;
   return Math.min(maxWindow, baseWindow + Math.round(amount ** 1.15 * (maxWindow - baseWindow)));
 }
 
+function getTimelineMaxSamples(metrics, smoothness, graphWidth) {
+  const recordCount = metrics?.records?.length ?? 0;
+  const clampedSmoothness = clampGraphSmoothness(smoothness);
+  if (clampedSmoothness <= MIN_GRAPH_SMOOTHNESS) return Math.max(1, recordCount);
+
+  const sampleDensity = getTimelineSampleDensity(clampedSmoothness);
+  return Math.max(120, Math.round(graphWidth * sampleDensity));
+}
+
 function getTimelineSampleDensity(smoothness) {
-  const amount = clampGraphSmoothness(smoothness) / 100;
+  const clampedSmoothness = clampGraphSmoothness(smoothness);
+  if (clampedSmoothness < 0) {
+    const detailAmount = (clampedSmoothness - MIN_GRAPH_SMOOTHNESS) / (LEGACY_GRAPH_SMOOTHNESS - MIN_GRAPH_SMOOTHNESS);
+    return 1 + (1 - detailAmount);
+  }
+
+  const amount = clampedSmoothness / MAX_GRAPH_SMOOTHNESS;
   return 1 - amount ** 1.2 * 0.72;
 }
 
 
 function clampGraphSmoothness(value) {
   if (!Number.isFinite(value)) return getDefaultGraphSmoothness();
-  return Math.max(0, Math.min(100, Math.round(value)));
+  return Math.max(MIN_GRAPH_SMOOTHNESS, Math.min(MAX_GRAPH_SMOOTHNESS, Math.round(value)));
 }
 
 function syncSp() {
@@ -516,7 +585,8 @@ function generateImage() {
     const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
     const graphSmoothness = getSelectedGraphSmoothness();
     const powerGraphHeight = getSelectedPowerGraphHeight();
-    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, graphSmoothness, powerGraphHeight });
+    const graphLineWidth = getSelectedGraphLineWidth();
+    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, graphSmoothness, powerGraphHeight, graphLineWidth });
   }
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -967,7 +1037,7 @@ function drawTabs() {
   });
 }
 
-function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphHeight }) {
+function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphHeight, graphLineWidth }) {
   const x = 27;
   const y = 195;
   const width = 948;
@@ -996,11 +1066,38 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
   });
   ctx.globalAlpha = 1;
   const step = Math.min(3, Math.max(0, powerWindow - 2));
-  drawPowerLine(powers, x, y, width, height, maxGraphPower, powerGraphDrawHeight, 1.7 - step * 0.3, 3.6 - step * 0.8);
+  const baseLineWidth = 1.7 - step * 0.3;
+  const baseShadowWidth = 3.6 - step * 0.8;
+  // Keep the existing duration-dependent line thickness when the option is left at 0%.
+  const lineWidthMultiplier = getGraphLineWidthMultiplier(graphLineWidth);
+  drawPowerLine(
+    powers,
+    x,
+    y,
+    width,
+    height,
+    maxGraphPower,
+    powerGraphDrawHeight,
+    baseLineWidth * lineWidthMultiplier,
+    baseShadowWidth * lineWidthMultiplier,
+  );
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
-  drawSeries(hrs, x, y + 28, width, height - 84, heartLineMax, '#e51f23', 1.7, heartLineMin);
+  const heartLineY = y + 28;
+  const heartLineHeight = height - 84;
+  drawSeries(
+    hrs,
+    x,
+    heartLineY,
+    width,
+    heartLineHeight,
+    heartLineMax,
+    '#e51f23',
+    1.7,
+    heartLineMin,
+    HEART_LINE_AMPLITUDE_SCALE,
+  );
 
   ctx.restore();
 
@@ -1019,7 +1116,14 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
   if (maxHeartRatePeak) {
     const hrDownsampledIndex = Math.min(hrs.length - 1, Math.floor(maxHeartRatePeak.index * hrs.length / metrics.records.length));
     const maxHrX = x + (hrDownsampledIndex / Math.max(1, hrs.length - 1)) * width;
-    const maxHrY = getSeriesY(maxHeartRatePeak.heartRate, y + 28, height - 84, heartLineMax, heartLineMin);
+    const maxHrY = getSeriesY(
+      maxHeartRatePeak.heartRate,
+      heartLineY,
+      heartLineHeight,
+      heartLineMax,
+      heartLineMin,
+      HEART_LINE_AMPLITUDE_SCALE,
+    );
     drawPeakLabel(`${Math.round(maxHeartRatePeak.heartRate)}bpm`, maxHrX, maxHrY - 16, '#fff', '#e11f28', y + 16, y + height - 22);
   }
 }
@@ -1067,8 +1171,10 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
-function getSeriesY(value, y, height, max, min = 0) {
-  return y + height - ((value - min) / Math.max(1, max - min)) * height;
+function getSeriesY(value, y, height, max, min = 0, amplitudeScale = 1) {
+  const rawY = y + height - ((value - min) / Math.max(1, max - min)) * height;
+  const centerY = y + height / 2;
+  return centerY + (rawY - centerY) * amplitudeScale;
 }
 
 function getPowerLineY(value, y, height, max, drawHeight = height - 58) {
@@ -1128,7 +1234,7 @@ function downsampleSeries(values, maxPoints, strategy = 'average') {
   return result;
 }
 
-function drawSeries(values, x, y, width, height, max, color, lineWidth, min = 0) {
+function drawSeries(values, x, y, width, height, max, color, lineWidth, min = 0, amplitudeScale = 1) {
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
@@ -1136,7 +1242,7 @@ function drawSeries(values, x, y, width, height, max, color, lineWidth, min = 0)
   values.forEach((value, index) => {
     if (!Number.isFinite(value)) return;
     const px = x + (index / Math.max(1, values.length - 1)) * width;
-    const py = y + height - ((value - min) / Math.max(1, max - min)) * height;
+    const py = getSeriesY(value, y, height, max, min, amplitudeScale);
     if (!started) {
       ctx.moveTo(px, py);
       started = true;
@@ -1441,4 +1547,5 @@ function roundedLeftRect(context, x, y, width, height, radius, fillStyle) {
 
 syncGraphSmoothnessSliderDefault();
 syncPowerGraphHeightSliderDefault();
+syncGraphLineWidthSliderDefault();
 drawPlaceholder();
