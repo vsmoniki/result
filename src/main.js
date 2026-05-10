@@ -1055,14 +1055,18 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
   const maxDisplayedPower = averagedPowers[maxDisplayedPowerIndex] ?? 0;
   const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
 
-  // Power bars with exact width (no overlap) to prevent color bleed
-  const barW = width / Math.max(1, powers.length);
+  // Snap each bar to an integer pixel bucket so fractional range widths do not
+  // alpha-blend adjacent bars on top of each other when smoothing changes the
+  // sample count.
+  const barCount = Math.max(1, powers.length);
   const powerGraphDrawHeight = getPowerGraphDrawHeight(height, powerGraphHeight);
   powers.forEach((p, index) => {
     const barH = Math.min(height - 5, (p / maxGraphPower) * powerGraphDrawHeight);
+    const barX = x + Math.round((index * width) / barCount);
+    const nextBarX = x + Math.round(((index + 1) * width) / barCount);
     ctx.fillStyle = zoneColor(p, ftp);
     ctx.globalAlpha = 0.82;
-    ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
+    ctx.fillRect(barX, y + height - barH, Math.max(1, nextBarX - barX), barH);
   });
   ctx.globalAlpha = 1;
   const step = Math.min(3, Math.max(0, powerWindow - 2));
