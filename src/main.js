@@ -388,6 +388,10 @@ function getTimelineSampleDensity(smoothness) {
   return 1 - amount ** 1.2 * 0.72;
 }
 
+function getTimelineBarMaxSamples(graphWidth, maxSamples) {
+  return Math.max(1, Math.min(Math.round(graphWidth), Math.round(maxSamples)));
+}
+
 
 function clampGraphSmoothness(value) {
   if (!Number.isFinite(value)) return getDefaultGraphSmoothness();
@@ -1064,16 +1068,18 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
 
   const averagedPowers = rollingPower(metrics.records, powerWindow);
   const powers = downsampleSeries(averagedPowers, maxSamples);
+  const powerBars = downsampleSeries(averagedPowers, getTimelineBarMaxSamples(width, maxSamples));
   const maxDisplayedPowerIndex = averagedPowers.reduce((maxI, p, i) => (Number.isFinite(p) && p > (averagedPowers[maxI] ?? 0) ? i : maxI), 0);
   const maxDisplayedPower = averagedPowers[maxDisplayedPowerIndex] ?? 0;
   const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
 
-  // Snap each bar to an integer pixel bucket so fractional range widths do not
-  // alpha-blend adjacent bars on top of each other when smoothing changes the
-  // sample count.
-  const barCount = Math.max(1, powers.length);
+  // Keep the filled bar layer to one sample per drawable pixel. At the -20
+  // detail setting the line can use every activity record, but drawing thousands
+  // of semi-transparent 1px bars into a 948px area overpaints the same pixels and
+  // makes the graph look darker/noisy.
+  const barCount = Math.max(1, powerBars.length);
   const powerGraphDrawHeight = getPowerGraphDrawHeight(height, powerGraphHeight);
-  powers.forEach((p, index) => {
+  powerBars.forEach((p, index) => {
     const barH = Math.min(height - 5, (p / maxGraphPower) * powerGraphDrawHeight);
     const barX = x + Math.round((index * width) / barCount);
     const nextBarX = x + Math.round(((index + 1) * width) / barCount);
