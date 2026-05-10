@@ -465,11 +465,12 @@ function generateImage() {
   } else {
     const title = $('#rideTitle').value.trim();
     const ftp = Number($('#ftp').value);
+    const level = Number($('#level').value);
     const maxHrSetting = Number($('#maxHrSetting').value);
-    if (!title || !isValidPositiveNumber(ftp) || !isValidPositiveNumber(maxHrSetting)) return setStatus('タイトル、FTP、最大心拍数を入力してください。', true);
+    if (!title || !isValidPositiveNumber(ftp) || !isValidLevel(level) || !isValidPositiveNumber(maxHrSetting)) return setStatus('タイトル、FTP、レベル、最大心拍数を入力してください。', true);
     const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
     const graphSmoothness = getSelectedGraphSmoothness();
-    drawRideReport(state.metrics, { title, ftp, maxHrSetting, sp, graphSmoothness });
+    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, graphSmoothness });
   }
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -518,12 +519,17 @@ function canGenerateImage() {
   return Boolean(
     $('#rideTitle').value.trim()
       && isValidPositiveNumber(Number($('#ftp').value))
+      && isValidLevel(Number($('#level').value))
       && isValidPositiveNumber(Number($('#maxHrSetting').value)),
   );
 }
 
 function isValidPositiveNumber(value) {
   return Number.isFinite(value) && value > 0;
+}
+
+function isValidLevel(value) {
+  return Number.isInteger(value) && value >= 1 && value <= 999;
 }
 
 function isSmartphoneDevice() {
@@ -752,7 +758,7 @@ function drawRideReport(metrics, options) {
 }
 
 
-function drawHeader(metrics, { title, sp }) {
+function drawHeader(metrics, { title, level, sp }) {
   ctx.fillStyle = '#27272b';
   ctx.textAlign = 'left';
   ctx.font = reportFont(27, 950, REPORT_NUMBER_FONT);
@@ -765,7 +771,7 @@ function drawHeader(metrics, { title, sp }) {
     { icon: null, value: Math.round(metrics.calories), unit: 'KCAL', x: 610, maxWidth: 155 },
     { icon: null, value: sp, unit: 'SP', x: 817, maxWidth: 92 },
   ];
-  drawLevelProgress();
+  drawLevelProgress(level);
   drawAvatar();
   stats.forEach((stat) => drawHeaderStat(stat));
 }
@@ -831,12 +837,12 @@ function drawHeaderIcon(type, x, y) {
   ctx.restore();
 }
 
-function drawLevelProgress() {
+function drawLevelProgress(level) {
   roundRect(ctx, 27, 133, 63, 16, 8, '#30343a');
   ctx.fillStyle = '#fff';
   ctx.font = reportFont(12);
   ctx.textAlign = 'center';
-  ctx.fillText('🚴 100', 58, 146);
+  ctx.fillText(`🚴 ${level}`, 58, 146);
   roundRect(ctx, 96, 133, 878, 16, 8, '#c9c9c9');
   roundedLeftRect(ctx, 96, 133, 37, 16, 8, '#ff5b1a');
   ctx.fillStyle = '#151515';
