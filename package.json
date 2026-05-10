@@ -7,10 +7,14 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node --test"
+    "test": "node --test",
+    "screenshot": "playwright screenshot --browser chromium --channel chrome http://localhost:5173/ /tmp/zwift-default-report.png"
   },
   "dependencies": {
     "fit-file-parser": "2.3.3",
     "vite": "latest"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1"
   }
 }
