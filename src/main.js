@@ -1214,6 +1214,8 @@ function drawPowerLine(values, x, y, width, height, max, drawHeight = height - 5
 }
 
 function drawPowerLineStroke(values, x, y, width, height, max, drawHeight, color, lineWidth) {
+  if (!Number.isFinite(lineWidth) || lineWidth <= 0) return;
+
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
