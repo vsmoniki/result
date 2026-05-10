@@ -1,5 +1,6 @@
 import FitParser from 'fit-file-parser';
 import { calculateNormalizedPower, calculateStressPoints } from './sp.js';
+import { titleFromFileName } from './ride-title.js';
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -164,7 +165,7 @@ async function processSelectedFile(file) {
     state.sourceData = sourceData;
     state.metrics = metrics;
     state.isLoadingFile = false;
-    syncRideTitle(sourceData, file);
+    syncRideTitle(file);
     syncGraphSmoothnessSliderDefault();
     syncPowerGraphHeightSliderDefault();
     syncGraphLineWidthSliderDefault();
@@ -415,89 +416,16 @@ function syncSp() {
   $('#spInput').value = sp;
 }
 
-function syncRideTitle(data, file) {
+function syncRideTitle(file) {
   const titleInput = $('#rideTitle');
   const currentTitle = titleInput.value.trim();
   if (currentTitle && currentTitle !== state.autoRideTitle) return;
 
-  const title = extractRideTitle(data) || titleFromFileName(file.name);
+  const title = titleFromFileName(file.name);
   if (!title) return;
 
   titleInput.value = title;
   state.autoRideTitle = title;
-}
-
-function extractRideTitle(data) {
-  const preferredValues = [
-    data.activity?.name,
-    data.activity?.title,
-    data.activity?.sport_profile_name,
-    data.sessions?.[0]?.name,
-    data.sessions?.[0]?.title,
-    data.sessions?.[0]?.sport_profile_name,
-    data.sports?.[0]?.name,
-    data.sports?.[0]?.sport_profile_name,
-    data.workout?.name,
-    data.workout?.wkt_name,
-    data.course?.name,
-  ];
-  return preferredValues.map(cleanRideTitle).find(Boolean)
-    || findNestedRideTitle({
-      activity: data.activity,
-      sessions: data.sessions,
-      sports: data.sports,
-      workout: data.workout,
-      course: data.course,
-    });
-}
-
-function findNestedRideTitle(value, depth = 0) {
-  if (!value || typeof value !== 'object' || depth > 4) return '';
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const title = findNestedRideTitle(item, depth + 1);
-      if (title) return title;
-    }
-    return '';
-  }
-
-  for (const [key, item] of Object.entries(value)) {
-    if (isRideTitleKey(key)) {
-      const title = cleanRideTitle(item);
-      if (title) return title;
-    }
-  }
-
-  for (const item of Object.values(value)) {
-    const title = findNestedRideTitle(item, depth + 1);
-    if (title) return title;
-  }
-  return '';
-}
-
-function isRideTitleKey(key) {
-  const normalized = key.toLowerCase().replace(/[\s_()-]/g, '');
-  return [
-    'title',
-    'name',
-    'activityname',
-    'workoutname',
-    'sportprofilename',
-    'coursename',
-    'eventname',
-  ].includes(normalized);
-}
-
-function cleanRideTitle(value) {
-  if (typeof value !== 'string') return '';
-  const title = value.trim();
-  if (!title || title.length > 80) return '';
-  if (/^(cycling|running|fitness_equipment|training|generic|road)$/i.test(title)) return '';
-  return title;
-}
-
-function titleFromFileName(fileName) {
-  return fileName.replace(/\.[^.]+$/, '').trim();
 }
 
 function clearGeneratedDownload() {
