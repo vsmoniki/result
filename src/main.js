@@ -15,6 +15,7 @@ const state = {
   isLoadingFile: false,
   graphSmoothnessTouched: false,
   powerGraphHeightTouched: false,
+  graphLineWidthTouched: false,
 };
 
 // Guard against duplicate activations while the native file picker is open.
@@ -25,6 +26,7 @@ const DEFAULT_CANVAS_WIDTH = 1920;
 const DEFAULT_CANVAS_HEIGHT = 1080;
 const LEGACY_GRAPH_SMOOTHNESS = 0;
 const DEFAULT_POWER_GRAPH_HEIGHT = 0;
+const DEFAULT_GRAPH_LINE_WIDTH = 0;
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const canvas = $('#canvas');
@@ -35,6 +37,8 @@ const graphSmoothnessSlider = $('#graphSmoothness');
 const graphSmoothnessValue = $('#graphSmoothnessValue');
 const powerGraphHeightSlider = $('#powerGraphHeight');
 const powerGraphHeightValue = $('#powerGraphHeightValue');
+const graphLineWidthSlider = $('#graphLineWidth');
+const graphLineWidthValue = $('#graphLineWidthValue');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
@@ -60,6 +64,7 @@ $('#rideTitle').addEventListener('input', handleRideTitleInput);
 $('#ftp').addEventListener('input', syncSp);
 graphSmoothnessSlider.addEventListener('input', handleGraphSmoothnessInput);
 powerGraphHeightSlider.addEventListener('input', handlePowerGraphHeightInput);
+graphLineWidthSlider.addEventListener('input', handleGraphLineWidthInput);
 
 function syncMode() {
   const mode = getMode();
@@ -68,6 +73,7 @@ function syncMode() {
   clearGeneratedDownload();
   syncGraphSmoothnessSliderDefault();
   syncPowerGraphHeightSliderDefault();
+  syncGraphLineWidthSliderDefault();
   drawPlaceholder();
 }
 
@@ -156,6 +162,7 @@ async function processSelectedFile(file) {
     syncRideTitle(sourceData, file);
     syncGraphSmoothnessSliderDefault();
     syncPowerGraphHeightSliderDefault();
+    syncGraphLineWidthSliderDefault();
     syncSp();
     $('#generate').disabled = false;
     fileDrop.classList.add('has-file');
@@ -184,6 +191,8 @@ function beginFileSelection(file) {
   clearGeneratedDownload();
   $('#generate').disabled = true;
   syncGraphSmoothnessSliderDefault();
+  syncPowerGraphHeightSliderDefault();
+  syncGraphLineWidthSliderDefault();
   drawPlaceholder();
   return selectionToken;
 }
@@ -222,6 +231,13 @@ function handleGraphSmoothnessInput() {
 function handlePowerGraphHeightInput() {
   state.powerGraphHeightTouched = true;
   syncPowerGraphHeightValue();
+  clearGeneratedDownload();
+  if (getMode() === 'report' && canGenerateImage()) generateImage();
+}
+
+function handleGraphLineWidthInput() {
+  state.graphLineWidthTouched = true;
+  syncGraphLineWidthValue();
   clearGeneratedDownload();
   if (getMode() === 'report' && canGenerateImage()) generateImage();
 }
@@ -271,6 +287,36 @@ function getDefaultPowerGraphHeight() {
 function clampPowerGraphHeight(value) {
   if (!Number.isFinite(value)) return getDefaultPowerGraphHeight();
   return Math.max(-50, Math.min(50, Math.round(value)));
+}
+
+function syncGraphLineWidthSliderDefault() {
+  if (!state.graphLineWidthTouched) {
+    graphLineWidthSlider.value = getDefaultGraphLineWidth();
+  }
+  syncGraphLineWidthValue();
+}
+
+function syncGraphLineWidthValue() {
+  const lineWidth = getSelectedGraphLineWidth();
+  graphLineWidthValue.textContent = formatSignedPercent(lineWidth);
+}
+
+function getSelectedGraphLineWidth() {
+  if (!state.graphLineWidthTouched) return getDefaultGraphLineWidth();
+  return clampGraphLineWidth(Number(graphLineWidthSlider.value));
+}
+
+function getDefaultGraphLineWidth() {
+  return DEFAULT_GRAPH_LINE_WIDTH;
+}
+
+function clampGraphLineWidth(value) {
+  if (!Number.isFinite(value)) return getDefaultGraphLineWidth();
+  return Math.max(-50, Math.min(150, Math.round(value)));
+}
+
+function getGraphLineWidthMultiplier(lineWidth) {
+  return 1 + clampGraphLineWidth(lineWidth) / 100;
 }
 
 function formatSignedPercent(value) {
@@ -516,7 +562,8 @@ function generateImage() {
     const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
     const graphSmoothness = getSelectedGraphSmoothness();
     const powerGraphHeight = getSelectedPowerGraphHeight();
-    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, graphSmoothness, powerGraphHeight });
+    const graphLineWidth = getSelectedGraphLineWidth();
+    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, graphSmoothness, powerGraphHeight, graphLineWidth });
   }
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -967,7 +1014,7 @@ function drawTabs() {
   });
 }
 
-function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphHeight }) {
+function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphHeight, graphLineWidth }) {
   const x = 27;
   const y = 195;
   const width = 948;
@@ -996,7 +1043,18 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
   });
   ctx.globalAlpha = 1;
   const step = Math.min(3, Math.max(0, powerWindow - 2));
-  drawPowerLine(powers, x, y, width, height, maxGraphPower, powerGraphDrawHeight, 1.7 - step * 0.3, 3.6 - step * 0.8);
+  const lineWidthMultiplier = getGraphLineWidthMultiplier(graphLineWidth);
+  drawPowerLine(
+    powers,
+    x,
+    y,
+    width,
+    height,
+    maxGraphPower,
+    powerGraphDrawHeight,
+    (1.7 - step * 0.3) * lineWidthMultiplier,
+    (3.6 - step * 0.8) * lineWidthMultiplier,
+  );
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
   const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
   const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
@@ -1441,4 +1499,5 @@ function roundedLeftRect(context, x, y, width, height, radius, fillStyle) {
 
 syncGraphSmoothnessSliderDefault();
 syncPowerGraphHeightSliderDefault();
+syncGraphLineWidthSliderDefault();
 drawPlaceholder();
