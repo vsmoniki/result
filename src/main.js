@@ -1051,6 +1051,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
 
   const averagedPowers = rollingPower(metrics.records, powerWindow);
   const powers = downsampleSeries(averagedPowers, maxSamples);
+  const colorPowers = downsampleSeries(metrics.records.map((record) => record.power), maxSamples, 'max');
   const maxDisplayedPowerIndex = averagedPowers.reduce((maxI, p, i) => (Number.isFinite(p) && p > (averagedPowers[maxI] ?? 0) ? i : maxI), 0);
   const maxDisplayedPower = averagedPowers[maxDisplayedPowerIndex] ?? 0;
   const maxGraphPower = Math.max(ftp * 1.45, maxDisplayedPower, 1);
@@ -1060,7 +1061,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
   const powerGraphDrawHeight = getPowerGraphDrawHeight(height, powerGraphHeight);
   powers.forEach((p, index) => {
     const barH = Math.min(height - 5, (p / maxGraphPower) * powerGraphDrawHeight);
-    ctx.fillStyle = zoneColor(p, ftp);
+    ctx.fillStyle = zoneColor(getTimelineBarColorPower(colorPowers[index], p), ftp);
     ctx.globalAlpha = 0.82;
     ctx.fillRect(x + index * barW, y + height - barH, barW, barH);
   });
@@ -1229,9 +1230,17 @@ function downsampleSeries(values, maxPoints, strategy = 'average') {
     const start = Math.floor(i * ratio);
     const end = Math.min(values.length, Math.floor((i + 1) * ratio));
     const slice = values.slice(start, end).filter(Number.isFinite);
+    if (strategy === 'max') {
+      result.push(slice.length ? Math.max(...slice) : NaN);
+      continue;
+    }
     result.push(slice.length ? slice.reduce((a, b) => a + b, 0) / slice.length : NaN);
   }
   return result;
+}
+
+function getTimelineBarColorPower(colorPower, fallbackPower) {
+  return Number.isFinite(colorPower) ? colorPower : fallbackPower;
 }
 
 function drawSeries(values, x, y, width, height, max, color, lineWidth, min = 0, amplitudeScale = 1) {
