@@ -529,7 +529,7 @@ function isValidPositiveNumber(value) {
 }
 
 function isValidLevel(value) {
-  return Number.isInteger(value) && value >= 1 && value <= 100;
+  return Number.isInteger(value) && value >= 1 && value <= 999;
 }
 
 function isSmartphoneDevice() {
