@@ -224,6 +224,25 @@ h1 {
   font-weight: 800;
 }
 
+.graph-smoothness-footer {
+  position: relative;
+  min-height: 1em;
+}
+
+.graph-smoothness-footer span {
+  position: absolute;
+  top: 0;
+}
+
+.graph-smoothness-default-label {
+  left: 16.667%;
+  transform: translateX(-50%);
+}
+
+.graph-smoothness-high-label {
+  right: 0;
+}
+
 
 .form-grid > label {
   display: grid;
