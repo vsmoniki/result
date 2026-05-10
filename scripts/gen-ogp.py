@@ -44,11 +44,18 @@ d.ellipse(
     outline=(255, 106, 0, 50), width=1
 )
 
-# --- fonts ---
+# --- fonts (Japanese-capable, prioritise IPA Gothic) ---
 def load_font(size, bold=False):
     candidates = [
+        # NotoSansCJK (bold variant used for both weights since IPA has no bold)
         f"/usr/share/fonts/truetype/noto/NotoSansCJK-{'Bold' if bold else 'Regular'}.ttc",
         f"/usr/share/fonts/opentype/noto/NotoSansCJK-{'Bold' if bold else 'Regular'}.ttc",
+        # IPA Gothic – full Japanese coverage
+        "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
+        "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",
+        # WenQuanYi – CJK coverage
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+        # Latin fallbacks
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else
