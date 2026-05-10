@@ -235,7 +235,7 @@ h1 {
 }
 
 .graph-smoothness-default-label {
-  left: 16.667%;
+  left: calc(16.667% + 1em);
   transform: translateX(-50%);
 }
 
