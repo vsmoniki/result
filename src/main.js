@@ -315,7 +315,7 @@ function getDefaultGraphLineWidth() {
 
 function clampGraphLineWidth(value) {
   if (!Number.isFinite(value)) return getDefaultGraphLineWidth();
-  return Math.max(-50, Math.min(150, Math.round(value)));
+  return Math.max(-100, Math.min(100, Math.round(value)));
 }
 
 function getGraphLineWidthMultiplier(lineWidth) {
