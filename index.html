@@ -79,17 +79,6 @@
           <canvas id="canvas" width="1920" height="1080" aria-label="生成画像プレビュー"></canvas>
           <details class="preview-options">
             <summary>オプション</summary>
-            <div class="option-slider-control graph-smoothness-control">
-              <div class="graph-smoothness-header">
-                <label for="graphSmoothness">グラフの平準化</label>
-                <strong id="graphSmoothnessValue">0%</strong>
-              </div>
-              <input id="graphSmoothness" type="range" min="-20" max="100" step="1" value="0" />
-              <div class="graph-smoothness-footer">
-                <span class="graph-smoothness-default-label">標準</span>
-                <span class="graph-smoothness-high-label">平準化</span>
-              </div>
-            </div>
             <div class="option-slider-control power-graph-height-control">
               <div class="option-slider-header">
                 <label for="powerGraphHeight">パワーメイングラフの高さ</label>
@@ -111,6 +100,17 @@
               <div class="option-slider-footer">
                 <span>細い</span>
                 <span>太い</span>
+              </div>
+            </div>
+            <div class="option-slider-control graph-smoothness-control">
+              <div class="graph-smoothness-header">
+                <label for="graphSmoothness">グラフの平準化</label>
+                <strong id="graphSmoothnessValue">0%</strong>
+              </div>
+              <input id="graphSmoothness" type="range" min="-20" max="100" step="1" value="0" />
+              <div class="graph-smoothness-footer">
+                <span class="graph-smoothness-default-label">標準</span>
+                <span class="graph-smoothness-high-label">平準化</span>
               </div>
             </div>
             <div class="option-reset-row">
