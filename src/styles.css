@@ -334,6 +334,25 @@ button:disabled {
   content: '−';
 }
 
+.option-reset-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 14px 14px;
+}
+
+.option-reset-button {
+  border: 1px solid rgba(255,255,255,.2);
+  padding: 10px 14px;
+  background: rgba(255,255,255,.1);
+  box-shadow: none;
+  font-size: .86rem;
+}
+
+.option-reset-button:hover,
+.option-reset-button:focus-visible {
+  background: rgba(255, 178, 26, .2);
+}
+
 .preview-options .option-slider-control {
   margin: 0 14px 14px;
 }
@@ -516,7 +535,12 @@ canvas {
     padding: 11px 12px;
   }
 
+  .option-reset-row,
   .preview-options .option-slider-control {
     margin: 0 10px 10px;
+  }
+
+  .option-reset-button {
+    width: 100%;
   }
 }
