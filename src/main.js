@@ -842,11 +842,6 @@ function drawFtpUpdateWorldBackground() {
   ctx.stroke();
 
   drawFtpUpdateRider();
-
-  ctx.fillStyle = '#f62419';
-  ctx.fillRect(0, 0, canvas.width, 29);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.24)';
-  ctx.fillRect(0, 29, canvas.width, 4);
 }
 
 function drawMountain(x, y, width, height, light, dark) {
