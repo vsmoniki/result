@@ -3,6 +3,7 @@
   font-family: Inter, ui-rounded, 'Hiragino Sans', 'Yu Gothic UI', 'Yu Gothic', system-ui, sans-serif;
   background: #071827;
   color: #f8fbff;
+  --in-app-browser-bottom-space: 0px;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -379,7 +380,7 @@ button:disabled {
 
 .support-footer {
   width: min(1480px, calc(100% - 32px));
-  margin: -28px auto 42px;
+  margin: -28px auto calc(42px + env(safe-area-inset-bottom, 0px) + var(--in-app-browser-bottom-space));
   text-align: center;
 }
 
@@ -464,6 +465,10 @@ canvas {
 }
 
 @media (max-width: 768px) {
+  :root {
+    --in-app-browser-bottom-space: 76px;
+  }
+
   h1 {
     max-width: none;
     font-size: clamp(1.34rem, 5.6vw, 2rem);
@@ -484,7 +489,7 @@ canvas {
 
   .support-footer {
     width: min(100%, calc(100% - 18px));
-    margin: -12px auto 28px;
+    margin: -12px auto calc(28px + env(safe-area-inset-bottom, 0px) + var(--in-app-browser-bottom-space));
   }
 
   .eyebrow {
