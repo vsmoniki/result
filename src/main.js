@@ -30,6 +30,7 @@ const MAX_GRAPH_SMOOTHNESS = 100;
 const LEGACY_GRAPH_SMOOTHNESS = 0;
 const DEFAULT_POWER_GRAPH_HEIGHT = 0;
 const DEFAULT_GRAPH_LINE_WIDTH = 0;
+const DEFAULT_AVATAR_MESSAGE = 'GO!';
 const HEART_LINE_AMPLITUDE_SCALE = 0.9;
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
@@ -67,6 +68,7 @@ window.addEventListener('focus', () => {
 $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
+$('#avatarMessage').addEventListener('input', handleAvatarMessageInput);
 $('#ftp').addEventListener('input', syncSp);
 graphSmoothnessSlider.addEventListener('input', handleGraphSmoothnessInput);
 powerGraphHeightSlider.addEventListener('input', handlePowerGraphHeightInput);
@@ -231,6 +233,11 @@ function handleRideTitleInput(event) {
   if (event.currentTarget.value !== state.autoRideTitle) {
     state.autoRideTitle = '';
   }
+}
+
+function handleAvatarMessageInput() {
+  clearGeneratedDownload();
+  if (getMode() === 'report' && canGenerateImage()) generateImage();
 }
 
 function handleGraphSmoothnessInput() {
@@ -547,10 +554,11 @@ function generateImage() {
     const maxHrSetting = Number($('#maxHrSetting').value);
     if (!title || !isValidPositiveNumber(ftp) || !isValidLevel(level) || !isValidPositiveNumber(maxHrSetting)) return setStatus('タイトル、FTP、レベル、最大心拍数を入力してください。', true);
     const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
+    const avatarMessage = getAvatarMessage();
     const graphSmoothness = getSelectedGraphSmoothness();
     const powerGraphHeight = getSelectedPowerGraphHeight();
     const graphLineWidth = getSelectedGraphLineWidth();
-    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, graphSmoothness, powerGraphHeight, graphLineWidth });
+    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, avatarMessage, graphSmoothness, powerGraphHeight, graphLineWidth });
   }
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -610,6 +618,10 @@ function canGenerateImage() {
 
 function isValidPositiveNumber(value) {
   return Number.isFinite(value) && value > 0;
+}
+
+function getAvatarMessage() {
+  return $('#avatarMessage').value.trim() || DEFAULT_AVATAR_MESSAGE;
 }
 
 function isValidLevel(value) {
@@ -1008,7 +1020,7 @@ function drawRideReport(metrics, options) {
 }
 
 
-function drawHeader(metrics, { title, level, sp }) {
+function drawHeader(metrics, { title, level, sp, avatarMessage }) {
   ctx.fillStyle = '#27272b';
   ctx.textAlign = 'left';
   ctx.font = reportFont(27, 950, REPORT_NUMBER_FONT);
@@ -1022,7 +1034,7 @@ function drawHeader(metrics, { title, level, sp }) {
     { icon: null, value: sp, unit: 'SP', x: 817, maxWidth: 92 },
   ];
   drawLevelProgress(level);
-  drawAvatar();
+  drawAvatar(avatarMessage);
   stats.forEach((stat) => drawHeaderStat(stat));
 }
 
@@ -1101,15 +1113,22 @@ function drawLevelProgress(level) {
   ctx.fillText('次のレベルまで 19192 XP', 966, 146);
 }
 
-function drawAvatar() {
+function drawAvatar(message = DEFAULT_AVATAR_MESSAGE) {
   ctx.save();
   ctx.translate(916, 54);
   ctx.rotate(-0.12);
   roundRect(ctx, -53, -1, 69, 38, 9, '#2f8ef4');
   ctx.fillStyle = '#fff';
-  ctx.font = reportFont(20);
   ctx.textAlign = 'center';
-  ctx.fillText('GO!', -18, 25);
+  ctx.textBaseline = 'alphabetic';
+  const text = String(message).trim() || DEFAULT_AVATAR_MESSAGE;
+  let fontSize = 20;
+  ctx.font = reportFont(fontSize);
+  while (ctx.measureText(text).width > 58 && fontSize > 12) {
+    fontSize -= 1;
+    ctx.font = reportFont(fontSize);
+  }
+  ctx.fillText(text, -18, 25);
   ctx.restore();
 
   ctx.save();

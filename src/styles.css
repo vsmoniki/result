@@ -175,7 +175,8 @@ h1 {
   grid-template-columns: repeat(2, minmax(150px, 1fr));
 }
 
-.ride-title-field {
+.ride-title-field,
+.avatar-message-field {
   grid-column: 1 / -1;
 }
 
