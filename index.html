@@ -29,9 +29,9 @@
     <div id="app">
       <main class="shell">
         <section class="hero">
-          <p class="eyebrow">FITファイルからPNG生成</p>
+          <p class="eyebrow">FITファイル・FTP更新からPNG生成</p>
           <h1>Zwift風リザルト画像メーカー</h1>
-          <p>FITファイルをブラウザ内で解析し、完走タイム画面またはライドレポート画面を生成します。</p>
+          <p>FITファイルをブラウザ内で解析し、完走タイム画面・ライドレポート画面・FTP更新画面を生成します。</p>
         </section>
 
         <section class="panel controls">
@@ -50,6 +50,7 @@
           <div class="mode-grid" role="tablist" aria-label="作成する画像タイプ">
             <label><input type="radio" name="mode" value="report" checked /> ライドレポート</label>
             <label><input type="radio" name="mode" value="finish" /> 完走タイム</label>
+            <label><input type="radio" name="mode" value="ftp-update" /> FTP更新</label>
           </div>
 
           <div id="reportInputs" class="form-grid">
@@ -62,6 +63,11 @@
 
           <div id="finishInputs" class="form-grid hidden">
             <label>体重（kg）<input id="weight" type="number" min="20" step="0.1" required /></label>
+          </div>
+
+          <div id="ftpUpdateInputs" class="form-grid hidden">
+            <label>元々のFTP（W）<input id="previousFtp" type="number" min="1" step="1" value="246" required /></label>
+            <label>更新後のFTP（W）<input id="updatedFtp" type="number" min="1" step="1" value="247" required /></label>
           </div>
 
           <div class="actions">

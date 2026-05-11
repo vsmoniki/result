@@ -47,6 +47,7 @@ const resetOptionsButton = $('#resetOptions');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
+$('input[name="mode"][value="ftp-update"]').addEventListener('change', syncMode);
 fileDrop.addEventListener('dragover', handleFileDragOver);
 fileDrop.addEventListener('dragleave', handleFileDragLeave);
 fileDrop.addEventListener('drop', handleFileDrop);
@@ -74,13 +75,18 @@ resetOptionsButton.addEventListener('click', resetOptionsToDefaults);
 
 function syncMode() {
   const mode = getMode();
+  const requiresFitFile = mode !== 'ftp-update';
   $('#finishInputs').classList.toggle('hidden', mode !== 'finish');
   $('#reportInputs').classList.toggle('hidden', mode !== 'report');
+  $('#ftpUpdateInputs').classList.toggle('hidden', mode !== 'ftp-update');
+  fileDrop.classList.toggle('hidden', !requiresFitFile);
+  document.querySelector('.preview-options').classList.toggle('hidden', mode !== 'report');
   clearGeneratedDownload();
   syncGraphSmoothnessSliderDefault();
   syncPowerGraphHeightSliderDefault();
   syncGraphLineWidthSliderDefault();
   drawPlaceholder();
+  setStatus(getMode() === 'ftp-update' ? '元々のFTPと更新後のFTPを入力してください。' : 'FITファイルを選択してください。');
 }
 
 function prepareFilePicker(event) {
@@ -516,16 +522,21 @@ function getMode() {
 }
 
 function generateImage() {
-  if (state.isLoadingFile) {
+  const mode = getMode();
+  if (state.isLoadingFile && mode !== 'ftp-update') {
     setStatus('ファイルを読み込み中です。完了してから画像を作成してください。', true);
     return;
   }
-  if (!state.metrics) {
+  if (mode === 'ftp-update') {
+    const previousFtp = Number($('#previousFtp').value);
+    const updatedFtp = Number($('#updatedFtp').value);
+    if (!isValidPositiveNumber(previousFtp) || !isValidPositiveNumber(updatedFtp)) return setStatus('元々のFTPと更新後のFTPを入力してください。', true);
+    drawFtpUpdateResult(Math.round(previousFtp), Math.round(updatedFtp));
+  } else if (!state.metrics) {
     handlePendingFileSelection();
     setStatus('先にFITファイルを選択してください。', true);
     return;
-  }
-  if (getMode() === 'finish') {
+  } else if (mode === 'finish') {
     const weight = Number($('#weight').value);
     if (!isValidPositiveNumber(weight)) return setStatus('体重を入力してください。', true);
     drawFinishResult(state.metrics, weight);
@@ -583,6 +594,10 @@ async function savePng(event) {
 }
 
 function canGenerateImage() {
+  if (getMode() === 'ftp-update') {
+    return isValidPositiveNumber(Number($('#previousFtp').value))
+      && isValidPositiveNumber(Number($('#updatedFtp').value));
+  }
   if (!state.metrics || state.isLoadingFile) return false;
   if (getMode() === 'finish') return isValidPositiveNumber(Number($('#weight').value));
   return Boolean(
@@ -770,7 +785,178 @@ function drawPlaceholder() {
   ctx.fillStyle = 'rgba(255,255,255,.92)';
   ctx.font = '800 72px system-ui, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('FITファイルを選択して画像を作成', w / 2, h / 2);
+  ctx.fillText(getMode() === 'ftp-update' ? 'FTP更新画像を作成' : 'FITファイルを選択して画像を作成', w / 2, h / 2);
+}
+
+function drawFtpUpdateResult(previousFtp, updatedFtp) {
+  canvas.width = 1536;
+  canvas.height = 1024;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawFtpUpdateWorldBackground();
+  drawFtpUpdateDialog(previousFtp, updatedFtp);
+}
+
+function drawFtpUpdateWorldBackground() {
+  const sky = ctx.createLinearGradient(0, 0, 0, 450);
+  sky.addColorStop(0, '#f28c67');
+  sky.addColorStop(0.38, '#ffc37d');
+  sky.addColorStop(0.72, '#8fb0ff');
+  sky.addColorStop(1, '#5e7ed7');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = 'rgba(248, 188, 128, 0.35)';
+  for (let i = 0; i < 15; i += 1) {
+    ctx.beginPath();
+    ctx.ellipse(360 + i * 28, 150 + Math.sin(i) * 24, 115, 25, -0.12, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  drawMountain(96, 0, 420, 750, '#6f7558', '#384b3c');
+  drawMountain(618, 80, 815, 520, '#7fa6f8', '#5678de');
+  drawFtpUpdateTrees();
+
+  ctx.fillStyle = '#1e2d63';
+  ctx.beginPath();
+  ctx.moveTo(18, 1024);
+  ctx.lineTo(590, 514);
+  ctx.lineTo(942, 514);
+  ctx.lineTo(1394, 1024);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = '#f2c52a';
+  ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.moveTo(136, 1024);
+  ctx.lineTo(658, 520);
+  ctx.moveTo(179, 1024);
+  ctx.lineTo(690, 520);
+  ctx.stroke();
+
+  ctx.strokeStyle = '#8ed8ff';
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.moveTo(1248, 1024);
+  ctx.lineTo(907, 526);
+  ctx.stroke();
+
+  drawFtpUpdateRider();
+
+  ctx.fillStyle = '#f62419';
+  ctx.fillRect(0, 0, canvas.width, 29);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.24)';
+  ctx.fillRect(0, 29, canvas.width, 4);
+}
+
+function drawMountain(x, y, width, height, light, dark) {
+  const gradient = ctx.createLinearGradient(x, y, x + width, y + height);
+  gradient.addColorStop(0, light);
+  gradient.addColorStop(1, dark);
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.moveTo(x, y + height);
+  ctx.bezierCurveTo(x + width * 0.1, y + height * 0.2, x + width * 0.28, y + height * 0.08, x + width * 0.45, y);
+  ctx.bezierCurveTo(x + width * 0.58, y + height * 0.26, x + width * 0.82, y + height * 0.24, x + width, y + height);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawFtpUpdateTrees() {
+  const grass = ctx.createLinearGradient(0, 420, 0, 1024);
+  grass.addColorStop(0, '#1d7c39');
+  grass.addColorStop(1, '#47df66');
+  ctx.fillStyle = grass;
+  ctx.beginPath();
+  ctx.moveTo(760, 556);
+  ctx.bezierCurveTo(990, 490, 1220, 485, 1536, 404);
+  ctx.lineTo(1536, 1024);
+  ctx.lineTo(1028, 1024);
+  ctx.bezierCurveTo(986, 820, 848, 665, 760, 556);
+  ctx.closePath();
+  ctx.fill();
+
+  for (let i = 0; i < 32; i += 1) {
+    const x = 826 + (i * 73) % 710;
+    const y = 72 + (i * 41) % 390;
+    const radius = 50 + (i % 5) * 13;
+    ctx.fillStyle = i % 3 === 0 ? '#145c31' : '#1f7439';
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawFtpUpdateRider() {
+  ctx.save();
+  ctx.globalAlpha = 0.42;
+  ctx.translate(745, 790);
+  ctx.strokeStyle = '#101a3d';
+  ctx.lineWidth = 12;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-28, 112);
+  ctx.lineTo(8, 14);
+  ctx.lineTo(56, 120);
+  ctx.moveTo(10, 18);
+  ctx.lineTo(-55, 62);
+  ctx.moveTo(8, 14);
+  ctx.lineTo(70, 49);
+  ctx.stroke();
+  ctx.fillStyle = '#1774e8';
+  roundRect(ctx, -25, -18, 50, 90, 17, '#1774e8');
+  ctx.fillStyle = '#f3c1a4';
+  ctx.beginPath();
+  ctx.arc(7, -48, 23, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#111827';
+  ctx.beginPath();
+  ctx.arc(7, -56, 25, Math.PI, 0);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFtpUpdateDialog(previousFtp, updatedFtp) {
+  const panelX = 268;
+  const panelY = 350;
+  const panelW = 916;
+  const headerH = 64;
+  const bodyH = 328;
+  roundRect(ctx, panelX, panelY, panelW, headerH, 8, '#f1f6f6');
+  ctx.fillStyle = '#25242e';
+  ctx.fillRect(panelX, panelY + headerH, panelW, bodyH);
+
+  ctx.fillStyle = '#342c37';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = '900 44px "Arial Rounded MT Bold", "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif';
+  ctx.fillText('FTPの向上が検知されました', panelX + panelW / 2, panelY + 47);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = '900 27px "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif';
+  ctx.fillText('パワー(FTP)の向上が検知され、プロフィールが更新されました！', panelX + panelW / 2, panelY + 121);
+
+  ctx.fillStyle = '#9d9ba5';
+  ctx.font = '900 24px "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif';
+  ctx.fillText('前回', panelX + 280, panelY + 190);
+  ctx.fillStyle = '#ffcf18';
+  ctx.fillText('今回', panelX + 636, panelY + 190);
+
+  ctx.font = '950 78px "Arial Black", "Arial Rounded MT Bold", "Hiragino Sans", system-ui, sans-serif';
+  ctx.fillStyle = '#f1fbff';
+  ctx.fillText(`${previousFtp}w`, panelX + 310, panelY + 279);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '950 40px "Arial Black", system-ui, sans-serif';
+  ctx.fillText('»', panelX + 456, panelY + 259);
+  ctx.fillText('»', panelX + 472, panelY + 259);
+  ctx.fillStyle = '#ffcf18';
+  ctx.font = '950 78px "Arial Black", "Arial Rounded MT Bold", "Hiragino Sans", system-ui, sans-serif';
+  ctx.fillText(`${updatedFtp}w`, panelX + 662, panelY + 279);
+
+  roundRect(ctx, 556, 756, 342, 86, 12, '#fb4d13');
+  ctx.fillStyle = '#fff';
+  ctx.font = '900 47px "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif';
+  ctx.fillText('やったー！', 727, 815);
 }
 
 function drawFinishResult(metrics, weight) {

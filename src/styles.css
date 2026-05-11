@@ -169,6 +169,8 @@ h1 {
 
 #finishInputs { grid-template-columns: minmax(160px, 220px); }
 
+#ftpUpdateInputs { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
+
 #reportInputs {
   grid-template-columns: repeat(2, minmax(150px, 1fr));
 }
