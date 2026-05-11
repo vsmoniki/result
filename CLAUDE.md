@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 規約
+
+- コミットメッセージ、PRタイトル・本文、ブランチ名の説明などは全て日本語で作成する
+
 ## What This Project Is
 
 **Zwift Result Image Maker** — a vanilla-JS, single-page web app deployed to GitHub Pages. Users drop a `.fit` cycling activity file onto the page; the app parses it in the browser and renders a Zwift-style result image onto an HTML `<canvas>`, which can then be saved as PNG.
