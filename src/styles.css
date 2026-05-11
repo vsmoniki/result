@@ -176,8 +176,15 @@ h1 {
 }
 
 .ride-title-field,
-.avatar-message-field {
+.avatar-message-field,
+.avatar-image-field {
   grid-column: 1 / -1;
+}
+
+.form-grid input[type="file"] {
+  background: rgba(255,255,255,.07);
+  color: #f8fbff;
+  cursor: pointer;
 }
 
 .option-slider-control {
