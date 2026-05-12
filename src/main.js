@@ -31,7 +31,7 @@ const LEGACY_GRAPH_SMOOTHNESS = 0;
 const DEFAULT_POWER_GRAPH_HEIGHT = 0;
 const DEFAULT_GRAPH_LINE_WIDTH = 0;
 const HEART_LINE_AMPLITUDE_SCALE = 0.9;
-const FAN_TOOL_MARK_LINES = ['Unofficial Fan Tool', 'Moniki Lab'];
+const FAN_TOOL_MARK_LINES = ['Unofficial Fan Tool', 'by Moniki Lab'];
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const canvas = $('#canvas');
@@ -800,9 +800,9 @@ function drawFinishResult(metrics, weight) {
 
   roundRect(ctx, 52, 506, 366, 73, 8, '#f5f5f5');
   roundRect(ctx, 60, 514, 350, 58, 4, '#ff5b1a');
-  ctx.fillStyle = 'rgba(255,255,255,.72)';
-  ctx.font = '700 16px system-ui, sans-serif';
-  FAN_TOOL_MARK_LINES.forEach((line, index) => ctx.fillText(line, 235, 458 + index * 22));
+  ctx.fillStyle = 'rgba(255,255,255,.42)';
+  ctx.font = '600 12px system-ui, sans-serif';
+  FAN_TOOL_MARK_LINES.forEach((line, index) => ctx.fillText(line, 235, 462 + index * 17));
 
   ctx.font = '900 30px system-ui, sans-serif';
   ctx.fillStyle = '#fff';
@@ -835,11 +835,11 @@ function drawRideReport(metrics, options) {
 
 function drawReportFanToolMark() {
   ctx.save();
-  ctx.fillStyle = 'rgba(255,255,255,.76)';
-  ctx.font = reportFont(10, 800);
+  ctx.fillStyle = 'rgba(255,255,255,.44)';
+  ctx.font = reportFont(8, 700);
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
-  FAN_TOOL_MARK_LINES.forEach((line, index) => ctx.fillText(line, 984, 12 + index * 17));
+  FAN_TOOL_MARK_LINES.forEach((line, index) => ctx.fillText(line, 984, 12 + index * 13));
   ctx.restore();
 }
 
