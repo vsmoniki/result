@@ -835,8 +835,8 @@ function drawRideReport(metrics, options) {
 
 function drawReportFanToolMark() {
   ctx.save();
-  ctx.fillStyle = 'rgba(255,255,255,.44)';
-  ctx.font = reportFont(8, 700);
+  ctx.fillStyle = 'rgba(255,255,255,.56)';
+  ctx.font = reportFont(9, 800);
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
   FAN_TOOL_MARK_LINES.forEach((line, index) => ctx.fillText(line, 984, 12 + index * 13));
