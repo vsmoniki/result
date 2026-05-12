@@ -69,19 +69,6 @@ h1 {
   line-height: 1.8;
 }
 
-.community-note {
-  display: inline-block;
-  margin: 2px 0 0;
-  border: 1px solid rgba(255,255,255,.16);
-  border-radius: 999px;
-  padding: 8px 16px;
-  color: #e4eef8;
-  background: rgba(255,255,255,.07);
-  font-size: .9rem;
-  font-weight: 800;
-  line-height: 1.45;
-}
-
 .panel {
   border: 1px solid rgba(255,255,255,.12);
   border-radius: 26px;
