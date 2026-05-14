@@ -3,6 +3,7 @@
   font-family: Inter, ui-rounded, 'Hiragino Sans', 'Yu Gothic UI', 'Yu Gothic', system-ui, sans-serif;
   background: #071827;
   color: #f8fbff;
+  --in-app-browser-bottom-space: 0px;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -389,7 +390,7 @@ button:disabled {
 
 .support-footer {
   width: min(1480px, calc(100% - 32px));
-  margin: -28px auto 42px;
+  margin: -28px auto calc(42px + env(safe-area-inset-bottom, 0px) + var(--in-app-browser-bottom-space));
   text-align: center;
 }
 
@@ -407,7 +408,7 @@ button:disabled {
     linear-gradient(135deg, rgba(255, 178, 26, .28), rgba(255, 91, 26, .18)),
     rgba(255, 178, 26, .12);
   font-weight: 950;
-  text-align: left;
+  text-align: center;
   text-decoration: none;
   box-shadow: 0 16px 42px rgba(255, 138, 26, .22);
   transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
@@ -427,6 +428,7 @@ button:disabled {
 
 .support-link__text {
   display: grid;
+  justify-items: center;
   gap: 2px;
   line-height: 1.15;
 }
@@ -474,6 +476,10 @@ canvas {
 }
 
 @media (max-width: 768px) {
+  :root {
+    --in-app-browser-bottom-space: 76px;
+  }
+
   h1 {
     max-width: none;
     font-size: clamp(1.34rem, 5.6vw, 2rem);
@@ -494,7 +500,7 @@ canvas {
 
   .support-footer {
     width: min(100%, calc(100% - 18px));
-    margin: -12px auto 28px;
+    margin: -12px auto calc(28px + env(safe-area-inset-bottom, 0px) + var(--in-app-browser-bottom-space));
   }
 
   .eyebrow {

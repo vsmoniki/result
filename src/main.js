@@ -34,6 +34,7 @@ const DEFAULT_GRAPH_LINE_WIDTH = 0;
 const DEFAULT_AVATAR_MESSAGE = 'GO!';
 const AVATAR_IMAGE_KEY = 'avatarImageDataUrl';
 const HEART_LINE_AMPLITUDE_SCALE = 0.9;
+const FAN_TOOL_MARK_LINES = ['Unofficial Fan Tool', 'by Moniki Lab'];
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const canvas = $('#canvas');
@@ -1022,6 +1023,10 @@ function drawFinishResult(metrics, weight) {
 
   roundRect(ctx, 52, 506, 366, 73, 8, '#f5f5f5');
   roundRect(ctx, 60, 514, 350, 58, 4, '#ff5b1a');
+  ctx.fillStyle = 'rgba(255,255,255,.42)';
+  ctx.font = '600 12px system-ui, sans-serif';
+  FAN_TOOL_MARK_LINES.forEach((line, index) => ctx.fillText(line, 235, 462 + index * 17));
+
   ctx.font = '900 30px system-ui, sans-serif';
   ctx.fillStyle = '#fff';
   ctx.fillText('閉じる', 235, 553);
@@ -1041,6 +1046,7 @@ function drawRideReport(metrics, options) {
   ctx.font = reportFont(37);
   ctx.textAlign = 'center';
   ctx.fillText('ライドレポート', 500, 34);
+  drawReportFanToolMark();
 
   drawHeader(metrics, options);
   drawTabs();
@@ -1066,6 +1072,16 @@ function drawHeader(metrics, { title, level, sp, avatarMessage }) {
   drawLevelProgress(level);
   drawAvatar(avatarMessage);
   stats.forEach((stat) => drawHeaderStat(stat));
+}
+
+function drawReportFanToolMark() {
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,.56)';
+  ctx.font = reportFont(9, 800);
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  FAN_TOOL_MARK_LINES.forEach((line, index) => ctx.fillText(line, 984, 12 + index * 13));
+  ctx.restore();
 }
 
 
