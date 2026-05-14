@@ -17,6 +17,7 @@ const state = {
   graphSmoothnessTouched: false,
   powerGraphHeightTouched: false,
   graphLineWidthTouched: false,
+  avatarImage: null,
 };
 
 // Guard against duplicate activations while the native file picker is open.
@@ -30,6 +31,8 @@ const MAX_GRAPH_SMOOTHNESS = 100;
 const LEGACY_GRAPH_SMOOTHNESS = 0;
 const DEFAULT_POWER_GRAPH_HEIGHT = 0;
 const DEFAULT_GRAPH_LINE_WIDTH = 0;
+const DEFAULT_AVATAR_MESSAGE = 'GO!';
+const AVATAR_IMAGE_KEY = 'avatarImageDataUrl';
 const HEART_LINE_AMPLITUDE_SCALE = 0.9;
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
@@ -67,11 +70,14 @@ window.addEventListener('focus', () => {
 $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
+$('#avatarMessage').addEventListener('input', handleAvatarMessageInput);
+$('#avatarImageFile').addEventListener('change', handleAvatarImageInput);
 $('#ftp').addEventListener('input', syncSp);
 graphSmoothnessSlider.addEventListener('input', handleGraphSmoothnessInput);
 powerGraphHeightSlider.addEventListener('input', handlePowerGraphHeightInput);
 graphLineWidthSlider.addEventListener('input', handleGraphLineWidthInput);
 resetOptionsButton.addEventListener('click', resetOptionsToDefaults);
+loadSavedAvatarImage();
 
 function syncMode() {
   const mode = getMode();
@@ -231,6 +237,37 @@ function handleRideTitleInput(event) {
   if (event.currentTarget.value !== state.autoRideTitle) {
     state.autoRideTitle = '';
   }
+}
+
+function handleAvatarMessageInput() {
+  clearGeneratedDownload();
+  if (getMode() === 'report' && canGenerateImage()) generateImage();
+}
+
+function handleAvatarImageInput(event) {
+  const file = event.currentTarget.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    const img = new Image();
+    img.onload = () => {
+      state.avatarImage = img;
+      try { localStorage.setItem(AVATAR_IMAGE_KEY, dataUrl); } catch {}
+      clearGeneratedDownload();
+      if (getMode() === 'report' && canGenerateImage()) generateImage();
+    };
+    img.src = dataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+function loadSavedAvatarImage() {
+  const dataUrl = localStorage.getItem(AVATAR_IMAGE_KEY);
+  if (!dataUrl) return;
+  const img = new Image();
+  img.onload = () => { state.avatarImage = img; };
+  img.src = dataUrl;
 }
 
 function handleGraphSmoothnessInput() {
@@ -547,10 +584,11 @@ function generateImage() {
     const maxHrSetting = Number($('#maxHrSetting').value);
     if (!title || !isValidPositiveNumber(ftp) || !isValidLevel(level) || !isValidPositiveNumber(maxHrSetting)) return setStatus('タイトル、FTP、レベル、最大心拍数を入力してください。', true);
     const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
+    const avatarMessage = getAvatarMessage();
     const graphSmoothness = getSelectedGraphSmoothness();
     const powerGraphHeight = getSelectedPowerGraphHeight();
     const graphLineWidth = getSelectedGraphLineWidth();
-    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, graphSmoothness, powerGraphHeight, graphLineWidth });
+    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, avatarMessage, graphSmoothness, powerGraphHeight, graphLineWidth });
   }
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -610,6 +648,10 @@ function canGenerateImage() {
 
 function isValidPositiveNumber(value) {
   return Number.isFinite(value) && value > 0;
+}
+
+function getAvatarMessage() {
+  return $('#avatarMessage').value.trim() || DEFAULT_AVATAR_MESSAGE;
 }
 
 function isValidLevel(value) {
@@ -1008,7 +1050,7 @@ function drawRideReport(metrics, options) {
 }
 
 
-function drawHeader(metrics, { title, level, sp }) {
+function drawHeader(metrics, { title, level, sp, avatarMessage }) {
   ctx.fillStyle = '#27272b';
   ctx.textAlign = 'left';
   ctx.font = reportFont(27, 950, REPORT_NUMBER_FONT);
@@ -1022,7 +1064,7 @@ function drawHeader(metrics, { title, level, sp }) {
     { icon: null, value: sp, unit: 'SP', x: 817, maxWidth: 92 },
   ];
   drawLevelProgress(level);
-  drawAvatar();
+  drawAvatar(avatarMessage);
   stats.forEach((stat) => drawHeaderStat(stat));
 }
 
@@ -1101,58 +1143,72 @@ function drawLevelProgress(level) {
   ctx.fillText('次のレベルまで 19192 XP', 966, 146);
 }
 
-function drawAvatar() {
+function drawAvatar(message = DEFAULT_AVATAR_MESSAGE) {
   ctx.save();
   ctx.translate(916, 54);
   ctx.rotate(-0.12);
   roundRect(ctx, -53, -1, 69, 38, 9, '#2f8ef4');
   ctx.fillStyle = '#fff';
-  ctx.font = reportFont(20);
   ctx.textAlign = 'center';
-  ctx.fillText('GO!', -18, 25);
+  ctx.textBaseline = 'alphabetic';
+  const text = String(message).trim() || DEFAULT_AVATAR_MESSAGE;
+  let fontSize = 20;
+  ctx.font = reportFont(fontSize);
+  while (ctx.measureText(text).width > 58 && fontSize > 12) {
+    fontSize -= 1;
+    ctx.font = reportFont(fontSize);
+  }
+  ctx.fillText(text, -18, 25);
   ctx.restore();
 
   ctx.save();
   ctx.translate(944, 101);
-  ctx.fillStyle = '#d9a47d';
-  ctx.beginPath();
-  ctx.arc(0, 0, 29, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#1f2937';
-  ctx.beginPath();
-  ctx.arc(2, -16, 31, Math.PI, 0);
-  ctx.fill();
-  ctx.fillStyle = '#ff5b1a';
-  ctx.fillRect(-28, -18, 56, 8);
-  ctx.fillStyle = '#111';
-  ctx.beginPath();
-  ctx.moveTo(-28, -7);
-  ctx.lineTo(25, -14);
-  ctx.lineTo(20, 1);
-  ctx.lineTo(-22, 7);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#37d5ff';
-  ctx.beginPath();
-  ctx.moveTo(-20, -5);
-  ctx.lineTo(0, -8);
-  ctx.lineTo(-1, 7);
-  ctx.lineTo(-16, 8);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(4, -9);
-  ctx.lineTo(24, -12);
-  ctx.lineTo(18, 3);
-  ctx.lineTo(4, 5);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#7c3f24';
-  ctx.beginPath();
-  ctx.arc(20, 11, 9, -0.3, 1.4);
-  ctx.strokeStyle = '#7c3f24';
-  ctx.lineWidth = 4;
-  ctx.stroke();
+  if (state.avatarImage) {
+    ctx.beginPath();
+    ctx.arc(0, 0, 29, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(state.avatarImage, -29, -29, 58, 58);
+  } else {
+    ctx.fillStyle = '#d9a47d';
+    ctx.beginPath();
+    ctx.arc(0, 0, 29, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1f2937';
+    ctx.beginPath();
+    ctx.arc(2, -16, 31, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = '#ff5b1a';
+    ctx.fillRect(-28, -18, 56, 8);
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.moveTo(-28, -7);
+    ctx.lineTo(25, -14);
+    ctx.lineTo(20, 1);
+    ctx.lineTo(-22, 7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#37d5ff';
+    ctx.beginPath();
+    ctx.moveTo(-20, -5);
+    ctx.lineTo(0, -8);
+    ctx.lineTo(-1, 7);
+    ctx.lineTo(-16, 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(4, -9);
+    ctx.lineTo(24, -12);
+    ctx.lineTo(18, 3);
+    ctx.lineTo(4, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#7c3f24';
+    ctx.beginPath();
+    ctx.arc(20, 11, 9, -0.3, 1.4);
+    ctx.strokeStyle = '#7c3f24';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
