@@ -29,9 +29,9 @@
     <div id="app">
       <main class="shell">
         <section class="hero">
-          <p class="eyebrow">FITファイル・FTP更新からPNG生成</p>
+          <p class="eyebrow">FITファイルからPNG生成</p>
           <h1>Zwift風リザルト画像メーカー</h1>
-          <p>FITファイルをブラウザ内で解析し、完走タイム画面・ライドレポート画面・FTP更新画面を生成します。</p>
+          <p>FITファイルをブラウザ内で解析し、ライドレポート画面・完走タイム画面を生成します。</p>
           <p>Zwiftコミュニティ向けの非公式ツールです。<br />Unofficial tool for the Zwift community.</p>
         </section>
 
@@ -56,12 +56,27 @@
 
           <div id="reportInputs" class="form-grid">
             <label class="ride-title-field">ライドタイトル<input id="rideTitle" type="text" required /></label>
-            <label class="avatar-message-field">右上の吹き出し<input id="avatarMessage" type="text" maxlength="12" value="GO!" /></label>
-            <label class="avatar-image-field">プロフィール画像<input id="avatarImageFile" type="file" accept="image/*" /></label>
             <label>FTP（W）<input id="ftp" type="number" min="1" step="1" required /></label>
             <label>最大心拍数（bpm）<input id="maxHrSetting" type="number" min="80" step="1" required /></label>
-            <label>SP<input id="spInput" type="number" min="0" step="1" /></label>
-            <label>レベル<input id="level" type="number" min="1" max="999" step="1" value="100" required /></label>
+            <details class="report-details">
+              <summary>その他</summary>
+              <div class="report-details-grid">
+                <div class="report-extra-row">
+                  <label>SP<input id="spInput" type="number" min="0" step="1" /></label>
+                  <label>レベル<input id="level" type="number" min="1" max="999" step="1" value="100" required /></label>
+                </div>
+                <div class="avatar-message-row">
+                  <label class="avatar-message-field">右上の吹き出し<input id="avatarMessage" type="text" maxlength="12" value="GO!" /></label>
+                  <label>吹き出し色<input id="avatarBubbleColor" type="color" value="#2f8ef4" /></label>
+                  <label>文字色<input id="avatarTextColor" type="color" value="#ffffff" /></label>
+                  <button id="resetAvatarBubble" class="secondary-action report-details-reset" type="button">デフォルトに戻す</button>
+                </div>
+                <div class="avatar-image-row">
+                  <label class="avatar-image-field">右上のアイコン<input id="avatarImageFile" type="file" accept="image/*" /></label>
+                  <button id="resetAvatarImage" class="secondary-action report-details-reset" type="button">デフォルトに戻す</button>
+                </div>
+              </div>
+            </details>
           </div>
 
           <div id="finishInputs" class="form-grid hidden">
@@ -69,8 +84,8 @@
           </div>
 
           <div id="ftpUpdateInputs" class="form-grid hidden">
-            <label>元々のFTP（W）<input id="previousFtp" type="number" min="1" step="1" value="246" required /></label>
-            <label>更新後のFTP（W）<input id="updatedFtp" type="number" min="1" step="1" value="247" required /></label>
+            <label>元々のFTP（W）<input id="previousFtp" type="number" min="1" step="1" required /></label>
+            <label>更新後のFTP（W）<input id="updatedFtp" type="number" min="1" step="1" required /></label>
           </div>
 
           <div class="actions">
@@ -129,15 +144,26 @@
         </section>
       </main>
       <footer class="support-footer">
-        <a class="support-link" href="https://buymeacoffee.com/monikilab" target="_blank" rel="noopener noreferrer" aria-label="Buy me a coffeeでクリエイターにコーヒーを奢る">
+        <a class="support-link" href="https://buymeacoffee.com/monikilab" target="_blank" rel="noopener noreferrer" aria-label="Buy me a coffeeでクリエイターを応援する">
           <span class="support-link__icon" aria-hidden="true">☕</span>
           <span class="support-link__text">
-            <span class="support-link__label">クリエイターにコーヒーを奢る</span>
+            <span class="support-link__label">クリエイターを応援する</span>
             <span class="support-link__service">Buy me a coffee</span>
           </span>
         </a>
       </footer>
     </div>
+    <dialog id="avatarCropDialog" class="avatar-crop-dialog">
+      <div class="avatar-crop-surface">
+        <h2>右上のアイコン</h2>
+        <canvas id="avatarCropCanvas" width="320" height="320" aria-label="アイコン切り抜き範囲"></canvas>
+        <label class="avatar-crop-size">範囲<input id="avatarCropSize" type="range" min="35" max="100" step="1" value="100" /></label>
+        <div class="avatar-crop-actions">
+          <button id="cancelAvatarCrop" class="secondary-action" type="button">キャンセル</button>
+          <button id="applyAvatarCrop" type="button">保存</button>
+        </div>
+      </div>
+    </dialog>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>

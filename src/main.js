@@ -18,6 +18,7 @@ const state = {
   powerGraphHeightTouched: false,
   graphLineWidthTouched: false,
   avatarImage: null,
+  avatarCrop: null,
 };
 
 // Guard against duplicate activations while the native file picker is open.
@@ -32,7 +33,12 @@ const LEGACY_GRAPH_SMOOTHNESS = 0;
 const DEFAULT_POWER_GRAPH_HEIGHT = 0;
 const DEFAULT_GRAPH_LINE_WIDTH = 0;
 const DEFAULT_AVATAR_MESSAGE = 'GO!';
+const DEFAULT_AVATAR_BUBBLE_COLOR = '#2f8ef4';
+const DEFAULT_AVATAR_TEXT_COLOR = '#ffffff';
 const AVATAR_IMAGE_KEY = 'avatarImageDataUrl';
+const AVATAR_MESSAGE_KEY = 'avatarMessage';
+const AVATAR_BUBBLE_COLOR_KEY = 'avatarBubbleColor';
+const AVATAR_TEXT_COLOR_KEY = 'avatarTextColor';
 const HEART_LINE_AMPLITUDE_SCALE = 0.9;
 const FAN_TOOL_MARK_LINES = ['Unofficial Fan Tool', 'by Moniki Lab'];
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
@@ -48,6 +54,10 @@ const powerGraphHeightValue = $('#powerGraphHeightValue');
 const graphLineWidthSlider = $('#graphLineWidth');
 const graphLineWidthValue = $('#graphLineWidthValue');
 const resetOptionsButton = $('#resetOptions');
+const avatarCropDialog = $('#avatarCropDialog');
+const avatarCropCanvas = $('#avatarCropCanvas');
+const avatarCropCtx = avatarCropCanvas.getContext('2d');
+const avatarCropSizeSlider = $('#avatarCropSize');
 
 $('input[name="mode"][value="finish"]').addEventListener('change', syncMode);
 $('input[name="mode"][value="report"]').addEventListener('change', syncMode);
@@ -72,12 +82,24 @@ $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
 $('#avatarMessage').addEventListener('input', handleAvatarMessageInput);
+$('#avatarBubbleColor').addEventListener('input', handleAvatarStyleInput);
+$('#avatarTextColor').addEventListener('input', handleAvatarStyleInput);
+$('#resetAvatarBubble').addEventListener('click', resetAvatarBubbleSettings);
 $('#avatarImageFile').addEventListener('change', handleAvatarImageInput);
+$('#resetAvatarImage').addEventListener('click', resetAvatarImage);
+$('#applyAvatarCrop').addEventListener('click', applyAvatarCrop);
+$('#cancelAvatarCrop').addEventListener('click', cancelAvatarCrop);
+avatarCropCanvas.addEventListener('pointerdown', startAvatarCropDrag);
+avatarCropCanvas.addEventListener('pointermove', dragAvatarCrop);
+avatarCropCanvas.addEventListener('pointerup', finishAvatarCropDrag);
+avatarCropCanvas.addEventListener('pointercancel', finishAvatarCropDrag);
+avatarCropSizeSlider.addEventListener('input', handleAvatarCropSizeInput);
 $('#ftp').addEventListener('input', syncSp);
 graphSmoothnessSlider.addEventListener('input', handleGraphSmoothnessInput);
 powerGraphHeightSlider.addEventListener('input', handlePowerGraphHeightInput);
 graphLineWidthSlider.addEventListener('input', handleGraphLineWidthInput);
 resetOptionsButton.addEventListener('click', resetOptionsToDefaults);
+loadSavedAvatarBubbleSettings();
 loadSavedAvatarImage();
 
 function syncMode() {
@@ -87,13 +109,27 @@ function syncMode() {
   $('#reportInputs').classList.toggle('hidden', mode !== 'report');
   $('#ftpUpdateInputs').classList.toggle('hidden', mode !== 'ftp-update');
   fileDrop.classList.toggle('hidden', !requiresFitFile);
+  syncModeLayoutState();
   document.querySelector('.preview-options').classList.toggle('hidden', mode !== 'report');
+  syncPreviewOptionsOpenState();
   clearGeneratedDownload();
   syncGraphSmoothnessSliderDefault();
   syncPowerGraphHeightSliderDefault();
   syncGraphLineWidthSliderDefault();
   drawPlaceholder();
   setStatus(getMode() === 'ftp-update' ? '元々のFTPと更新後のFTPを入力してください。' : 'FITファイルを選択してください。');
+}
+
+function syncModeLayoutState() {
+  const mode = getMode();
+  document.querySelector('.controls').classList.toggle('is-ftp-update', mode === 'ftp-update');
+  document.querySelector('.preview-panel').classList.toggle('has-preview-options', mode === 'report');
+}
+
+function syncPreviewOptionsOpenState() {
+  const previewOptions = document.querySelector('.preview-options');
+  if (getMode() !== 'report') return;
+  previewOptions.open = matchMedia('(min-width: 1081px)').matches;
 }
 
 function prepareFilePicker(event) {
@@ -241,8 +277,22 @@ function handleRideTitleInput(event) {
 }
 
 function handleAvatarMessageInput() {
+  saveAvatarBubbleSettings();
   clearGeneratedDownload();
   if (getMode() === 'report' && canGenerateImage()) generateImage();
+}
+
+function handleAvatarStyleInput() {
+  saveAvatarBubbleSettings();
+  clearGeneratedDownload();
+  if (getMode() === 'report' && canGenerateImage()) generateImage();
+}
+
+function resetAvatarBubbleSettings() {
+  $('#avatarMessage').value = DEFAULT_AVATAR_MESSAGE;
+  $('#avatarBubbleColor').value = DEFAULT_AVATAR_BUBBLE_COLOR;
+  $('#avatarTextColor').value = DEFAULT_AVATAR_TEXT_COLOR;
+  handleAvatarStyleInput();
 }
 
 function handleAvatarImageInput(event) {
@@ -253,22 +303,226 @@ function handleAvatarImageInput(event) {
     const dataUrl = e.target.result;
     const img = new Image();
     img.onload = () => {
-      state.avatarImage = img;
-      try { localStorage.setItem(AVATAR_IMAGE_KEY, dataUrl); } catch {}
-      clearGeneratedDownload();
-      if (getMode() === 'report' && canGenerateImage()) generateImage();
+      openAvatarCropper(img);
     };
     img.src = dataUrl;
   };
   reader.readAsDataURL(file);
 }
 
+function openAvatarCropper(img) {
+  const maxDrawSize = Math.min(avatarCropCanvas.width - 24, avatarCropCanvas.height - 24);
+  const scale = Math.min(maxDrawSize / img.naturalWidth, maxDrawSize / img.naturalHeight);
+  const displayW = img.naturalWidth * scale;
+  const displayH = img.naturalHeight * scale;
+  const display = {
+    x: (avatarCropCanvas.width - displayW) / 2,
+    y: (avatarCropCanvas.height - displayH) / 2,
+    width: displayW,
+    height: displayH,
+  };
+  const size = Math.min(displayW, displayH);
+  state.avatarCrop = {
+    img,
+    display,
+    crop: {
+      x: display.x + (displayW - size) / 2,
+      y: display.y + (displayH - size) / 2,
+      size,
+    },
+    dragging: false,
+    dragOffsetX: 0,
+    dragOffsetY: 0,
+  };
+  avatarCropSizeSlider.value = 100;
+  drawAvatarCropper();
+  avatarCropDialog.showModal();
+}
+
+function drawAvatarCropper() {
+  const cropState = state.avatarCrop;
+  if (!cropState) return;
+  const { img, display, crop } = cropState;
+  avatarCropCtx.clearRect(0, 0, avatarCropCanvas.width, avatarCropCanvas.height);
+  avatarCropCtx.fillStyle = '#101827';
+  avatarCropCtx.fillRect(0, 0, avatarCropCanvas.width, avatarCropCanvas.height);
+  avatarCropCtx.drawImage(img, display.x, display.y, display.width, display.height);
+  avatarCropCtx.fillStyle = 'rgba(0,0,0,.52)';
+  avatarCropCtx.fillRect(0, 0, avatarCropCanvas.width, avatarCropCanvas.height);
+  avatarCropCtx.save();
+  avatarCropCtx.beginPath();
+  avatarCropCtx.rect(crop.x, crop.y, crop.size, crop.size);
+  avatarCropCtx.clip();
+  avatarCropCtx.drawImage(img, display.x, display.y, display.width, display.height);
+  avatarCropCtx.restore();
+  avatarCropCtx.strokeStyle = '#ffb21a';
+  avatarCropCtx.lineWidth = 3;
+  avatarCropCtx.strokeRect(crop.x + 1.5, crop.y + 1.5, crop.size - 3, crop.size - 3);
+}
+
+function startAvatarCropDrag(event) {
+  const cropState = state.avatarCrop;
+  if (!cropState) return;
+  const point = getAvatarCropPoint(event);
+  const { crop } = cropState;
+  if (
+    point.x < crop.x
+    || point.x > crop.x + crop.size
+    || point.y < crop.y
+    || point.y > crop.y + crop.size
+  ) return;
+  cropState.dragging = true;
+  cropState.dragOffsetX = point.x - crop.x;
+  cropState.dragOffsetY = point.y - crop.y;
+  avatarCropCanvas.setPointerCapture(event.pointerId);
+}
+
+function dragAvatarCrop(event) {
+  const cropState = state.avatarCrop;
+  if (!cropState?.dragging) return;
+  const point = getAvatarCropPoint(event);
+  cropState.crop.x = point.x - cropState.dragOffsetX;
+  cropState.crop.y = point.y - cropState.dragOffsetY;
+  clampAvatarCrop();
+  drawAvatarCropper();
+}
+
+function finishAvatarCropDrag(event) {
+  const cropState = state.avatarCrop;
+  if (!cropState) return;
+  cropState.dragging = false;
+  if (avatarCropCanvas.hasPointerCapture?.(event.pointerId)) {
+    avatarCropCanvas.releasePointerCapture(event.pointerId);
+  }
+}
+
+function handleAvatarCropSizeInput() {
+  const cropState = state.avatarCrop;
+  if (!cropState) return;
+  const { display, crop } = cropState;
+  const centerX = crop.x + crop.size / 2;
+  const centerY = crop.y + crop.size / 2;
+  const maxSize = Math.min(display.width, display.height);
+  const nextSize = maxSize * (Number(avatarCropSizeSlider.value) / 100);
+  crop.size = nextSize;
+  crop.x = centerX - nextSize / 2;
+  crop.y = centerY - nextSize / 2;
+  clampAvatarCrop();
+  drawAvatarCropper();
+}
+
+function clampAvatarCrop() {
+  const cropState = state.avatarCrop;
+  if (!cropState) return;
+  const { display, crop } = cropState;
+  crop.size = Math.min(crop.size, display.width, display.height);
+  crop.x = Math.max(display.x, Math.min(display.x + display.width - crop.size, crop.x));
+  crop.y = Math.max(display.y, Math.min(display.y + display.height - crop.size, crop.y));
+}
+
+function getAvatarCropPoint(event) {
+  const rect = avatarCropCanvas.getBoundingClientRect();
+  return {
+    x: ((event.clientX - rect.left) / rect.width) * avatarCropCanvas.width,
+    y: ((event.clientY - rect.top) / rect.height) * avatarCropCanvas.height,
+  };
+}
+
+function applyAvatarCrop() {
+  const cropState = state.avatarCrop;
+  if (!cropState) return;
+  const { img, display, crop } = cropState;
+  const sourceX = ((crop.x - display.x) / display.width) * img.naturalWidth;
+  const sourceY = ((crop.y - display.y) / display.height) * img.naturalHeight;
+  const sourceSize = (crop.size / display.width) * img.naturalWidth;
+  const output = document.createElement('canvas');
+  output.width = 256;
+  output.height = 256;
+  const outputCtx = output.getContext('2d');
+  outputCtx.drawImage(img, sourceX, sourceY, sourceSize, sourceSize, 0, 0, output.width, output.height);
+  const dataUrl = output.toDataURL('image/png');
+  saveAvatarImageDataUrl(dataUrl);
+  closeAvatarCropper();
+}
+
+function cancelAvatarCrop() {
+  $('#avatarImageFile').value = '';
+  closeAvatarCropper();
+}
+
+function closeAvatarCropper() {
+  state.avatarCrop = null;
+  if (avatarCropDialog.open) avatarCropDialog.close();
+}
+
+function saveAvatarImageDataUrl(dataUrl) {
+  const img = new Image();
+  img.onload = () => {
+    state.avatarImage = img;
+    try { localStorage.setItem(AVATAR_IMAGE_KEY, dataUrl); } catch {}
+    clearGeneratedDownload();
+    if (getMode() === 'report' && canGenerateImage()) generateImage();
+  };
+  img.src = dataUrl;
+}
+
 function loadSavedAvatarImage() {
   const dataUrl = localStorage.getItem(AVATAR_IMAGE_KEY);
   if (!dataUrl) return;
   const img = new Image();
-  img.onload = () => { state.avatarImage = img; };
+  img.onload = () => {
+    if (img.naturalWidth !== img.naturalHeight) {
+      saveAvatarImageDataUrl(centerCropAvatarImage(img));
+      return;
+    }
+    state.avatarImage = img;
+  };
   img.src = dataUrl;
+}
+
+function centerCropAvatarImage(img) {
+  const sourceSize = Math.min(img.naturalWidth, img.naturalHeight);
+  const sourceX = (img.naturalWidth - sourceSize) / 2;
+  const sourceY = (img.naturalHeight - sourceSize) / 2;
+  const output = document.createElement('canvas');
+  output.width = 256;
+  output.height = 256;
+  const outputCtx = output.getContext('2d');
+  outputCtx.drawImage(img, sourceX, sourceY, sourceSize, sourceSize, 0, 0, output.width, output.height);
+  return output.toDataURL('image/png');
+}
+
+function loadSavedAvatarBubbleSettings() {
+  const message = getLocalStorageValue(AVATAR_MESSAGE_KEY);
+  const bubbleColor = getLocalStorageValue(AVATAR_BUBBLE_COLOR_KEY);
+  const textColor = getLocalStorageValue(AVATAR_TEXT_COLOR_KEY);
+  if (message !== null) $('#avatarMessage').value = message || DEFAULT_AVATAR_MESSAGE;
+  if (isHexColor(bubbleColor)) $('#avatarBubbleColor').value = bubbleColor;
+  if (isHexColor(textColor)) $('#avatarTextColor').value = textColor;
+}
+
+function saveAvatarBubbleSettings() {
+  try {
+    localStorage.setItem(AVATAR_MESSAGE_KEY, $('#avatarMessage').value.trim() || DEFAULT_AVATAR_MESSAGE);
+    localStorage.setItem(AVATAR_BUBBLE_COLOR_KEY, getColorInputValue('#avatarBubbleColor', DEFAULT_AVATAR_BUBBLE_COLOR));
+    localStorage.setItem(AVATAR_TEXT_COLOR_KEY, getColorInputValue('#avatarTextColor', DEFAULT_AVATAR_TEXT_COLOR));
+  } catch {}
+}
+
+function getLocalStorageValue(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function resetAvatarImage() {
+  state.avatarImage = null;
+  $('#avatarImageFile').value = '';
+  try { localStorage.removeItem(AVATAR_IMAGE_KEY); } catch {}
+  clearGeneratedDownload();
+  if (getMode() === 'report' && canGenerateImage()) generateImage();
 }
 
 function handleGraphSmoothnessInput() {
@@ -586,10 +840,12 @@ function generateImage() {
     if (!title || !isValidPositiveNumber(ftp) || !isValidLevel(level) || !isValidPositiveNumber(maxHrSetting)) return setStatus('タイトル、FTP、レベル、最大心拍数を入力してください。', true);
     const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
     const avatarMessage = getAvatarMessage();
+    const avatarBubbleColor = getColorInputValue('#avatarBubbleColor', DEFAULT_AVATAR_BUBBLE_COLOR);
+    const avatarTextColor = getColorInputValue('#avatarTextColor', DEFAULT_AVATAR_TEXT_COLOR);
     const graphSmoothness = getSelectedGraphSmoothness();
     const powerGraphHeight = getSelectedPowerGraphHeight();
     const graphLineWidth = getSelectedGraphLineWidth();
-    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, avatarMessage, graphSmoothness, powerGraphHeight, graphLineWidth });
+    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, avatarMessage, avatarBubbleColor, avatarTextColor, graphSmoothness, powerGraphHeight, graphLineWidth });
   }
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -653,6 +909,15 @@ function isValidPositiveNumber(value) {
 
 function getAvatarMessage() {
   return $('#avatarMessage').value.trim() || DEFAULT_AVATAR_MESSAGE;
+}
+
+function getColorInputValue(selector, fallback) {
+  const value = $(selector).value;
+  return isHexColor(value) ? value : fallback;
+}
+
+function isHexColor(value) {
+  return /^#[0-9a-f]{6}$/i.test(value);
 }
 
 function isValidLevel(value) {
@@ -837,6 +1102,7 @@ function drawFtpUpdateResult(previousFtp, updatedFtp) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawFtpUpdateWorldBackground();
   drawFtpUpdateDialog(previousFtp, updatedFtp);
+  drawFtpUpdateFanToolMark();
 }
 
 function drawFtpUpdateWorldBackground() {
@@ -997,6 +1263,16 @@ function drawFtpUpdateDialog(previousFtp, updatedFtp) {
   ctx.fillText('やったー！', 727, 815);
 }
 
+function drawFtpUpdateFanToolMark() {
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,.62)';
+  ctx.font = '800 18px "Arial Rounded MT Bold", "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  FAN_TOOL_MARK_LINES.forEach((line, index) => ctx.fillText(line, 1500, 946 + index * 26));
+  ctx.restore();
+}
+
 function drawFinishResult(metrics, weight) {
   canvas.width = 470;
   canvas.height = 584;
@@ -1056,7 +1332,7 @@ function drawRideReport(metrics, options) {
 }
 
 
-function drawHeader(metrics, { title, level, sp, avatarMessage }) {
+function drawHeader(metrics, { title, level, sp, avatarMessage, avatarBubbleColor, avatarTextColor }) {
   ctx.fillStyle = '#27272b';
   ctx.textAlign = 'left';
   ctx.font = reportFont(27, 950, REPORT_NUMBER_FONT);
@@ -1070,7 +1346,7 @@ function drawHeader(metrics, { title, level, sp, avatarMessage }) {
     { icon: null, value: sp, unit: 'SP', x: 817, maxWidth: 92 },
   ];
   drawLevelProgress(level);
-  drawAvatar(avatarMessage);
+  drawAvatar(avatarMessage, avatarBubbleColor, avatarTextColor);
   stats.forEach((stat) => drawHeaderStat(stat));
 }
 
@@ -1159,31 +1435,37 @@ function drawLevelProgress(level) {
   ctx.fillText('次のレベルまで 19192 XP', 966, 146);
 }
 
-function drawAvatar(message = DEFAULT_AVATAR_MESSAGE) {
+function drawAvatar(message = DEFAULT_AVATAR_MESSAGE, bubbleColor = DEFAULT_AVATAR_BUBBLE_COLOR, textColor = DEFAULT_AVATAR_TEXT_COLOR) {
   ctx.save();
   ctx.translate(916, 54);
   ctx.rotate(-0.12);
-  roundRect(ctx, -53, -1, 69, 38, 9, '#2f8ef4');
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = textColor;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   const text = String(message).trim() || DEFAULT_AVATAR_MESSAGE;
   let fontSize = 20;
+  const minBubbleWidth = 69;
+  const maxBubbleWidth = 180;
+  const bubblePaddingX = 14;
+  const maxTextWidth = maxBubbleWidth - bubblePaddingX * 2;
   ctx.font = reportFont(fontSize);
-  while (ctx.measureText(text).width > 58 && fontSize > 12) {
+  while (ctx.measureText(text).width > maxTextWidth && fontSize > 12) {
     fontSize -= 1;
     ctx.font = reportFont(fontSize);
   }
-  ctx.fillText(text, -18, 25);
+  const textWidth = ctx.measureText(text).width;
+  const bubbleWidth = Math.min(maxBubbleWidth, Math.max(minBubbleWidth, Math.ceil(textWidth + bubblePaddingX * 2)));
+  roundRect(ctx, -bubbleWidth, -1, bubbleWidth, 38, 9, bubbleColor);
+  ctx.fillStyle = textColor;
+  ctx.fillText(text, -bubbleWidth / 2, 25);
   ctx.restore();
 
   ctx.save();
   ctx.translate(944, 101);
   if (state.avatarImage) {
-    ctx.beginPath();
-    ctx.arc(0, 0, 29, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(state.avatarImage, -29, -29, 58, 58);
+    ctx.fillStyle = '#f6f6f4';
+    ctx.fillRect(-32, -41, 64, 64);
+    ctx.drawImage(state.avatarImage, -32, -41, 64, 64);
   } else {
     ctx.fillStyle = '#d9a47d';
     ctx.beginPath();
@@ -1760,4 +2042,6 @@ function roundedLeftRect(context, x, y, width, height, radius, fillStyle) {
 syncGraphSmoothnessSliderDefault();
 syncPowerGraphHeightSliderDefault();
 syncGraphLineWidthSliderDefault();
+syncModeLayoutState();
+syncPreviewOptionsOpenState();
 drawPlaceholder();
