@@ -784,8 +784,26 @@ canvas {
   }
 
   .avatar-message-row {
-    grid-template-columns: minmax(0, 1fr) 48px 48px auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
     gap: 6px;
+  }
+
+  .avatar-message-field {
+    flex: 0 0 100%;
+  }
+
+  .avatar-message-row label:not(.avatar-message-field) {
+    flex: 0 0 64px;
+  }
+
+  .avatar-message-row label:not(.avatar-message-field) + label:not(.avatar-message-field) {
+    margin-left: 10px;
+  }
+
+  .avatar-message-row .report-details-reset {
+    margin-left: auto;
   }
 
   .avatar-message-row label,
@@ -796,8 +814,8 @@ canvas {
   }
 
   .avatar-message-row input[type="color"] {
-    height: 34px;
-    min-height: 34px;
+    height: 38px;
+    min-height: 38px;
     padding: 2px;
   }
 
