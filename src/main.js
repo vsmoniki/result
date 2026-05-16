@@ -1343,7 +1343,7 @@ function drawHeader(metrics, { title, level, sp, avatarMessage, avatarBubbleColo
     { icon: 'route', value: metrics.distanceKm.toFixed(1), unit: 'km', x: 240, maxWidth: 155 },
     { icon: 'clock', value: formatReportDuration(metrics.duration), unit: 'ET', x: 414, maxWidth: 150 },
     { icon: null, value: Math.round(metrics.calories), unit: 'KCAL', x: 610, maxWidth: 155 },
-    { icon: null, value: sp, unit: 'SP', x: 817, maxWidth: 92 },
+    { icon: null, value: sp, unit: 'SP', x: 817, maxWidth: 92, outline: true },
   ];
   drawLevelProgress(level);
   drawAvatar(avatarMessage, avatarBubbleColor, avatarTextColor);
@@ -1361,7 +1361,7 @@ function drawReportFanToolMark() {
 }
 
 
-function drawHeaderStat({ icon, value, unit, x, maxWidth }) {
+function drawHeaderStat({ icon, value, unit, x, maxWidth, outline = false }) {
   ctx.fillStyle = '#24242a';
   ctx.textAlign = 'left';
   const valueX = icon ? x + 32 : x;
@@ -1372,6 +1372,14 @@ function drawHeaderStat({ icon, value, unit, x, maxWidth }) {
   while (ctx.measureText(text).width > maxWidth && fontSize > 29) {
     fontSize -= 1;
     ctx.font = reportFont(fontSize, 900, REPORT_NUMBER_FONT);
+  }
+  if (outline) {
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#fff';
+    ctx.strokeText(text, valueX, 118);
+    ctx.restore();
   }
   ctx.fillText(text, valueX, 118);
   const unitX = valueX + ctx.measureText(text).width + 5;
