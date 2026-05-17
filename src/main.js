@@ -41,6 +41,7 @@ const AVATAR_BUBBLE_COLOR_KEY = 'avatarBubbleColor';
 const AVATAR_TEXT_COLOR_KEY = 'avatarTextColor';
 const FTP_SETTING_KEY = 'ftpSetting';
 const MAX_HR_SETTING_KEY = 'maxHrSetting';
+const WEIGHT_SETTING_KEY = 'weightSetting';
 const HEART_LINE_AMPLITUDE_SCALE = 0.9;
 const FAN_TOOL_MARK_LINES = ['Unofficial Fan Tool', 'by Moniki Lab'];
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
@@ -98,6 +99,7 @@ avatarCropCanvas.addEventListener('pointercancel', finishAvatarCropDrag);
 avatarCropSizeSlider.addEventListener('input', handleAvatarCropSizeInput);
 $('#ftp').addEventListener('input', handleFtpSettingInput);
 $('#maxHrSetting').addEventListener('input', handleMaxHrSettingInput);
+$('#weight').addEventListener('input', handleWeightSettingInput);
 graphSmoothnessSlider.addEventListener('input', handleGraphSmoothnessInput);
 powerGraphHeightSlider.addEventListener('input', handlePowerGraphHeightInput);
 graphLineWidthSlider.addEventListener('input', handleGraphLineWidthInput);
@@ -525,6 +527,7 @@ function getLocalStorageValue(key) {
 function loadSavedPerformanceSettings() {
   loadSavedNumberInput(FTP_SETTING_KEY, '#ftp');
   loadSavedNumberInput(MAX_HR_SETTING_KEY, '#maxHrSetting');
+  loadSavedNumberInput(WEIGHT_SETTING_KEY, '#weight');
 }
 
 function loadSavedNumberInput(key, selector) {
@@ -547,6 +550,12 @@ function handleFtpSettingInput() {
 
 function handleMaxHrSettingInput() {
   saveNumberInputValue(MAX_HR_SETTING_KEY, '#maxHrSetting');
+}
+
+function handleWeightSettingInput() {
+  saveNumberInputValue(WEIGHT_SETTING_KEY, '#weight');
+  clearGeneratedDownload();
+  if (getMode() === 'finish' && canGenerateImage()) generateImage();
 }
 
 function resetAvatarImage() {
