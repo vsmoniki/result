@@ -39,6 +39,8 @@ const AVATAR_IMAGE_KEY = 'avatarImageDataUrl';
 const AVATAR_MESSAGE_KEY = 'avatarMessage';
 const AVATAR_BUBBLE_COLOR_KEY = 'avatarBubbleColor';
 const AVATAR_TEXT_COLOR_KEY = 'avatarTextColor';
+const FTP_SETTING_KEY = 'ftpSetting';
+const MAX_HR_SETTING_KEY = 'maxHrSetting';
 const HEART_LINE_AMPLITUDE_SCALE = 0.9;
 const FAN_TOOL_MARK_LINES = ['Unofficial Fan Tool', 'by Moniki Lab'];
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
@@ -94,11 +96,13 @@ avatarCropCanvas.addEventListener('pointermove', dragAvatarCrop);
 avatarCropCanvas.addEventListener('pointerup', finishAvatarCropDrag);
 avatarCropCanvas.addEventListener('pointercancel', finishAvatarCropDrag);
 avatarCropSizeSlider.addEventListener('input', handleAvatarCropSizeInput);
-$('#ftp').addEventListener('input', syncSp);
+$('#ftp').addEventListener('input', handleFtpSettingInput);
+$('#maxHrSetting').addEventListener('input', handleMaxHrSettingInput);
 graphSmoothnessSlider.addEventListener('input', handleGraphSmoothnessInput);
 powerGraphHeightSlider.addEventListener('input', handlePowerGraphHeightInput);
 graphLineWidthSlider.addEventListener('input', handleGraphLineWidthInput);
 resetOptionsButton.addEventListener('click', resetOptionsToDefaults);
+loadSavedPerformanceSettings();
 loadSavedAvatarBubbleSettings();
 loadSavedAvatarImage();
 
@@ -515,6 +519,34 @@ function getLocalStorageValue(key) {
   } catch {
     return null;
   }
+}
+
+
+function loadSavedPerformanceSettings() {
+  loadSavedNumberInput(FTP_SETTING_KEY, '#ftp');
+  loadSavedNumberInput(MAX_HR_SETTING_KEY, '#maxHrSetting');
+}
+
+function loadSavedNumberInput(key, selector) {
+  const value = getLocalStorageValue(key);
+  if (value === null || value === '') return;
+  if (!isValidPositiveNumber(Number(value))) return;
+  $(selector).value = value;
+}
+
+function saveNumberInputValue(key, selector) {
+  try {
+    localStorage.setItem(key, $(selector).value);
+  } catch {}
+}
+
+function handleFtpSettingInput() {
+  saveNumberInputValue(FTP_SETTING_KEY, '#ftp');
+  syncSp();
+}
+
+function handleMaxHrSettingInput() {
+  saveNumberInputValue(MAX_HR_SETTING_KEY, '#maxHrSetting');
 }
 
 function resetAvatarImage() {
