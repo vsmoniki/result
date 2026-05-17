@@ -1445,7 +1445,7 @@ function drawLevelProgress(level) {
 
 function drawAvatar(message = DEFAULT_AVATAR_MESSAGE, bubbleColor = DEFAULT_AVATAR_BUBBLE_COLOR, textColor = DEFAULT_AVATAR_TEXT_COLOR) {
   ctx.save();
-  ctx.translate(916, 54);
+  ctx.translate(916, 50);
   ctx.rotate(-0.12);
   ctx.fillStyle = textColor;
   ctx.textAlign = 'center';
