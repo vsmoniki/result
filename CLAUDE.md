@@ -21,7 +21,7 @@ npm run dev        # start Vite dev server (bound to 0.0.0.0:5173)
 npm run build      # production build → dist/
 npm run preview    # serve the production build locally
 npm test           # run tests with Node.js built-in test runner
-node scripts/gen-ogp.js  # regenerate public/ogp.png via Playwright
+node scripts/gen-ogp.js  # regenerate public/ogp-20260517.png via Playwright
 ```
 
 Running a single test file:
@@ -43,7 +43,7 @@ There is no framework and no TypeScript. The app is pure ES modules bundled by V
 | `src/ride-title.js` | Derives a ride title string from a FIT filename; exported for unit tests |
 | `src/styles.css` | All CSS, including responsive breakpoints |
 | `test/*.test.js` | Node.js `node:test` + `node:assert` tests for the pure utility modules |
-| `scripts/gen-ogp.{js,py}` | One-off scripts to regenerate `public/ogp.png` |
+| `scripts/gen-ogp.{js,py}` | One-off scripts to regenerate `public/ogp-20260517.png` |
 
 ### Key patterns in `src/main.js`
 
