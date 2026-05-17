@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Generate public/ogp.png (1200x630) for OGP / Twitter Card previews."""
+"""Generate public/ogp-20260517.png (1200x630) for OGP / Twitter Card previews."""
 import os
 import math
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1200, 630
-OUT = Path(__file__).parent.parent / "public" / "ogp.png"
+OUT = Path(__file__).parent.parent / "public" / "ogp-20260517.png"
 
 img = Image.new("RGB", (W, H), (14, 17, 23))
 d = ImageDraw.Draw(img)

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generates public/ogp.png (1200×630) for Open Graph / Twitter Card previews.
+ * Generates public/ogp-20260517.png (1200×630) for Open Graph / Twitter Card previews.
  * Run: node scripts/gen-ogp.js
  */
 import { chromium } from 'playwright';
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const outPath = path.resolve(__dirname, '../public/ogp.png');
+const outPath = path.resolve(__dirname, '../public/ogp-20260517.png');
 
 const html = String.raw`<!DOCTYPE html>
 <html>
