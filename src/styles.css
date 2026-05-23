@@ -445,8 +445,6 @@ button:disabled {
 
 .preview-toolbar h2 { margin-bottom: 0; }
 
-.preview-toolbar span { color: #9fd0ff; font-weight: 900; }
-
 .preview-options {
   margin: 14px 0 0;
   border: 1px solid rgba(255,255,255,.12);
@@ -842,11 +840,14 @@ canvas {
   }
 
   .preview-toolbar {
-    flex-direction: column;
-    gap: 4px;
+    gap: 8px;
     padding: 2px 4px 10px;
+    align-items: stretch;
   }
 
+  .preview-toolbar .download {
+    width: 100%;
+  }
 
   .preview-options {
     margin-top: 10px;
