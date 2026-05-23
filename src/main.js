@@ -898,8 +898,8 @@ function generateImage() {
     download.classList.remove('disabled');
   }, 'image/png');
   const saveMessage = isSmartphoneDevice()
-    ? '画像を作成しました。「PNGを保存」から端末に保存できます。'
-    : '画像を作成しました。PNGを保存できます。';
+    ? '画像を作成しました。「画像を保存」から端末に保存できます。'
+    : '画像を作成しました。画像を保存できます。';
   setStatus(saveMessage);
 }
 
