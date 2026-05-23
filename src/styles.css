@@ -79,7 +79,7 @@ h1 {
 
 .controls {
   display: grid;
-  grid-template-columns: minmax(280px, 1.2fr) minmax(220px, .8fr) 2fr auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, .7fr) minmax(260px, 1.5fr) auto;
   gap: 18px;
   align-items: center;
   padding: 20px;
@@ -387,10 +387,13 @@ h1 {
 .actions {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
+
 .actions #generate {
-  min-width: 12ch;
+  width: 100%;
+  min-width: 10ch;
   white-space: nowrap;
 }
 
@@ -649,6 +652,12 @@ canvas {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+}
+
+@media (max-width: 1280px) {
+  .controls {
+    grid-template-columns: minmax(180px, .85fr) minmax(160px, .65fr) minmax(240px, 1.5fr) auto;
+  }
 }
 
 @media (min-width: 1081px) {
