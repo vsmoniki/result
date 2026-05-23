@@ -777,7 +777,11 @@ canvas {
   }
 
   .actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .actions #generate {
+    grid-column: span 1;
   }
 
   .form-grid input {
@@ -840,13 +844,20 @@ canvas {
   }
 
   .preview-toolbar {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
     padding: 2px 4px 10px;
     align-items: stretch;
   }
 
+  .preview-toolbar h2 {
+    grid-column: span 2;
+  }
+
   .preview-toolbar .download {
     width: 100%;
+    grid-column: span 2;
   }
 
   .preview-options {
