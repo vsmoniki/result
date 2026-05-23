@@ -27,6 +27,10 @@ let pickerActivatedAt = 0;
 const PICKER_TIMEOUT_MS = 30_000;
 const DEFAULT_CANVAS_WIDTH = 1920;
 const DEFAULT_CANVAS_HEIGHT = 1080;
+
+const LONG_PRESS_SAVE_MS = 550;
+let previewLongPressTimer = null;
+let previewLongPressTriggered = false;
 const MIN_GRAPH_SMOOTHNESS = -20;
 const MAX_GRAPH_SMOOTHNESS = 100;
 const LEGACY_GRAPH_SMOOTHNESS = 0;
@@ -83,6 +87,9 @@ window.addEventListener('focus', () => {
 });
 $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
+canvas.addEventListener('touchstart', handlePreviewTouchStart, { passive: true });
+canvas.addEventListener('touchend', handlePreviewTouchEnd);
+canvas.addEventListener('touchcancel', handlePreviewTouchCancel);
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
 $('#avatarMessage').addEventListener('input', handleAvatarMessageInput);
 $('#avatarBubbleColor').addEventListener('input', handleAvatarStyleInput);
@@ -904,7 +911,41 @@ function generateImage() {
   setStatus(saveMessage);
 }
 
-async function savePng(event) {
+
+function triggerSaveFromPreview() {
+  if (!isSmartphoneDevice()) return;
+  savePng({ preventDefault() {} });
+}
+
+function clearPreviewLongPressTimer() {
+  if (!previewLongPressTimer) return;
+  clearTimeout(previewLongPressTimer);
+  previewLongPressTimer = null;
+}
+
+function handlePreviewTouchStart(event) {
+  if (!isSmartphoneDevice()) return;
+  if (event.touches.length !== 1) return;
+  previewLongPressTriggered = false;
+  clearPreviewLongPressTimer();
+  previewLongPressTimer = setTimeout(() => {
+    previewLongPressTriggered = true;
+    triggerSaveFromPreview();
+  }, LONG_PRESS_SAVE_MS);
+}
+
+function handlePreviewTouchEnd(event) {
+  clearPreviewLongPressTimer();
+  if (previewLongPressTriggered) {
+    event.preventDefault();
+  }
+}
+
+function handlePreviewTouchCancel() {
+  clearPreviewLongPressTimer();
+}
+
+async function savePng(event = { preventDefault() {} }) {
   const download = $('#download');
   if (download.classList.contains('disabled') || !state.downloadBlob) {
     event.preventDefault();
