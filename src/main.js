@@ -922,12 +922,14 @@ function resetPreviewTouchState() {
 }
 
 function triggerPreviewSave() {
+  const download = $('#download');
+  if (download.classList.contains('disabled') || !state.downloadBlob) return;
   const now = performance.now();
   if (previewSaveTriggeredAt && now - previewSaveTriggeredAt < PREVIEW_SAVE_DEBOUNCE_MS) {
     return;
   }
   previewSaveTriggeredAt = now;
-  savePng({ preventDefault() {} });
+  download.click();
 }
 
 function handlePreviewTouchStart(event) {
