@@ -29,8 +29,10 @@ const DEFAULT_CANVAS_WIDTH = 1920;
 const DEFAULT_CANVAS_HEIGHT = 1080;
 
 const LONG_PRESS_SAVE_MS = 550;
+const PREVIEW_SAVE_DEBOUNCE_MS = 1000;
 let previewTouchStartAt = 0;
 let previewTouchMoved = false;
+let previewSaveTriggeredAt = 0;
 const MIN_GRAPH_SMOOTHNESS = -20;
 const MAX_GRAPH_SMOOTHNESS = 100;
 const LEGACY_GRAPH_SMOOTHNESS = 0;
@@ -919,6 +921,17 @@ function resetPreviewTouchState() {
   previewTouchMoved = false;
 }
 
+function triggerPreviewSave() {
+  const download = $('#download');
+  if (download.classList.contains('disabled') || !state.downloadBlob) return;
+  const now = performance.now();
+  if (previewSaveTriggeredAt && now - previewSaveTriggeredAt < PREVIEW_SAVE_DEBOUNCE_MS) {
+    return;
+  }
+  previewSaveTriggeredAt = now;
+  download.click();
+}
+
 function handlePreviewTouchStart(event) {
   if (!isSmartphoneDevice()) return;
   if (event.touches.length !== 1) {
@@ -942,7 +955,7 @@ function handlePreviewTouchEnd(event) {
   const duration = performance.now() - startedAt;
   if (duration < LONG_PRESS_SAVE_MS) return;
   event.preventDefault();
-  savePng({ preventDefault() {} });
+  triggerPreviewSave();
 }
 
 function handlePreviewTouchCancel() {
@@ -952,6 +965,7 @@ function handlePreviewTouchCancel() {
 function handlePreviewContextMenu(event) {
   if (!isSmartphoneDevice()) return;
   event.preventDefault();
+  triggerPreviewSave();
 }
 
 async function savePng(event = { preventDefault() {} }) {
