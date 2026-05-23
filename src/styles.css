@@ -257,7 +257,7 @@ h1 {
 .avatar-message-row {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px 96px auto;
+  grid-template-columns: 96px 96px minmax(0, 1fr) auto;
   grid-template-areas:
     "message message message message"
     "bubble text . reset";
@@ -735,7 +735,7 @@ canvas {
   }
 
   .avatar-message-row {
-    grid-template-columns: minmax(0, 1fr) 88px 88px auto;
+    grid-template-columns: 88px 88px minmax(0, 1fr) auto;
     grid-template-areas:
       "message message message message"
       "bubble text . reset";
