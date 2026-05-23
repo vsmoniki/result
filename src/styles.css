@@ -643,6 +643,9 @@ canvas {
   object-fit: contain;
   border-radius: 18px;
   background: #075f9f;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 @media (min-width: 1081px) {
