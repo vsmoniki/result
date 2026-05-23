@@ -258,8 +258,28 @@ h1 {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 84px 84px auto;
+  grid-template-areas:
+    "message message message message"
+    "bubble text . reset";
   gap: 10px;
   align-items: end;
+}
+
+.avatar-message-field {
+  grid-area: message;
+  min-width: 0;
+}
+
+.avatar-bubble-color-field {
+  grid-area: bubble;
+}
+
+.avatar-text-color-field {
+  grid-area: text;
+}
+
+.avatar-message-row .report-details-reset {
+  grid-area: reset;
 }
 
 .avatar-message-row input[type="color"] {
@@ -711,6 +731,9 @@ canvas {
 
   .avatar-message-row {
     grid-template-columns: minmax(0, 1fr) 72px 72px auto;
+    grid-template-areas:
+      "message message message message"
+      "bubble text . reset";
     gap: 8px;
   }
 
