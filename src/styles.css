@@ -389,6 +389,11 @@ h1 {
   gap: 10px;
 }
 
+.actions #generate {
+  min-width: 12ch;
+  white-space: nowrap;
+}
+
 button,
 .download {
   border: 0;
@@ -777,11 +782,12 @@ canvas {
   }
 
   .actions {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .actions #generate {
-    grid-column: span 1;
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .form-grid input {
