@@ -228,7 +228,6 @@ async function processSelectedFile(file) {
     syncSp();
     $('#generate').disabled = false;
     fileDrop.classList.add('has-file');
-    $('#summary').textContent = `${formatDuration(metrics.duration)} / ${Math.round(metrics.avgPower)}W avg`;
     if (canGenerateImage()) {
       generateImage();
       setStatus('プレビューへ反映しました。');
@@ -272,7 +271,6 @@ function isCurrentFileSelection(selectionToken) {
 function resetSelectedFileState(resetFileName = true) {
   state.sourceData = null;
   state.metrics = null;
-  $('#summary').textContent = '';
   fileDrop.classList.remove('has-file');
   if (resetFileName) $('#fileName').textContent = '未選択';
 }
