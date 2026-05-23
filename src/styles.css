@@ -257,7 +257,7 @@ h1 {
 .avatar-message-row {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 84px 84px auto;
+  grid-template-columns: minmax(0, 1fr) 96px 96px auto;
   grid-template-areas:
     "message message message message"
     "bubble text . reset";
@@ -280,6 +280,11 @@ h1 {
 
 .avatar-message-row .report-details-reset {
   grid-area: reset;
+}
+
+
+.avatar-message-row label:not(.avatar-message-field) {
+  white-space: nowrap;
 }
 
 .avatar-message-row input[type="color"] {
@@ -730,7 +735,7 @@ canvas {
   }
 
   .avatar-message-row {
-    grid-template-columns: minmax(0, 1fr) 72px 72px auto;
+    grid-template-columns: minmax(0, 1fr) 88px 88px auto;
     grid-template-areas:
       "message message message message"
       "bubble text . reset";
