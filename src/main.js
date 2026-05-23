@@ -29,8 +29,8 @@ const DEFAULT_CANVAS_WIDTH = 1920;
 const DEFAULT_CANVAS_HEIGHT = 1080;
 
 const LONG_PRESS_SAVE_MS = 550;
-let previewLongPressTimer = null;
-let previewLongPressTriggered = false;
+let previewTouchStartAt = 0;
+let previewTouchMoved = false;
 const MIN_GRAPH_SMOOTHNESS = -20;
 const MAX_GRAPH_SMOOTHNESS = 100;
 const LEGACY_GRAPH_SMOOTHNESS = 0;
@@ -88,8 +88,10 @@ window.addEventListener('focus', () => {
 $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
 canvas.addEventListener('touchstart', handlePreviewTouchStart, { passive: true });
+canvas.addEventListener('touchmove', handlePreviewTouchMove, { passive: true });
 canvas.addEventListener('touchend', handlePreviewTouchEnd);
 canvas.addEventListener('touchcancel', handlePreviewTouchCancel);
+canvas.addEventListener('contextmenu', handlePreviewContextMenu);
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
 $('#avatarMessage').addEventListener('input', handleAvatarMessageInput);
 $('#avatarBubbleColor').addEventListener('input', handleAvatarStyleInput);
@@ -912,37 +914,44 @@ function generateImage() {
 }
 
 
-function triggerSaveFromPreview() {
-  if (!isSmartphoneDevice()) return;
-  savePng({ preventDefault() {} });
-}
-
-function clearPreviewLongPressTimer() {
-  if (!previewLongPressTimer) return;
-  clearTimeout(previewLongPressTimer);
-  previewLongPressTimer = null;
+function resetPreviewTouchState() {
+  previewTouchStartAt = 0;
+  previewTouchMoved = false;
 }
 
 function handlePreviewTouchStart(event) {
   if (!isSmartphoneDevice()) return;
-  if (event.touches.length !== 1) return;
-  previewLongPressTriggered = false;
-  clearPreviewLongPressTimer();
-  previewLongPressTimer = setTimeout(() => {
-    previewLongPressTriggered = true;
-    triggerSaveFromPreview();
-  }, LONG_PRESS_SAVE_MS);
+  if (event.touches.length !== 1) {
+    resetPreviewTouchState();
+    return;
+  }
+  previewTouchStartAt = performance.now();
+  previewTouchMoved = false;
+}
+
+function handlePreviewTouchMove() {
+  previewTouchMoved = true;
 }
 
 function handlePreviewTouchEnd(event) {
-  clearPreviewLongPressTimer();
-  if (previewLongPressTriggered) {
-    event.preventDefault();
-  }
+  if (!isSmartphoneDevice()) return;
+  const startedAt = previewTouchStartAt;
+  const moved = previewTouchMoved;
+  resetPreviewTouchState();
+  if (!startedAt || moved) return;
+  const duration = performance.now() - startedAt;
+  if (duration < LONG_PRESS_SAVE_MS) return;
+  event.preventDefault();
+  savePng({ preventDefault() {} });
 }
 
 function handlePreviewTouchCancel() {
-  clearPreviewLongPressTimer();
+  resetPreviewTouchState();
+}
+
+function handlePreviewContextMenu(event) {
+  if (!isSmartphoneDevice()) return;
+  event.preventDefault();
 }
 
 async function savePng(event = { preventDefault() {} }) {
