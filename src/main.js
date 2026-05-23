@@ -27,12 +27,6 @@ let pickerActivatedAt = 0;
 const PICKER_TIMEOUT_MS = 30_000;
 const DEFAULT_CANVAS_WIDTH = 1920;
 const DEFAULT_CANVAS_HEIGHT = 1080;
-
-const LONG_PRESS_SAVE_MS = 550;
-const PREVIEW_SAVE_DEBOUNCE_MS = 1000;
-let previewTouchStartAt = 0;
-let previewTouchMoved = false;
-let previewSaveTriggeredAt = 0;
 const MIN_GRAPH_SMOOTHNESS = -20;
 const MAX_GRAPH_SMOOTHNESS = 100;
 const LEGACY_GRAPH_SMOOTHNESS = 0;
@@ -89,11 +83,7 @@ window.addEventListener('focus', () => {
 });
 $('#generate').addEventListener('click', generateImage);
 $('#download').addEventListener('click', savePng);
-canvas.addEventListener('touchstart', handlePreviewTouchStart, { passive: true });
-canvas.addEventListener('touchmove', handlePreviewTouchMove, { passive: true });
-canvas.addEventListener('touchend', handlePreviewTouchEnd);
-canvas.addEventListener('touchcancel', handlePreviewTouchCancel);
-canvas.addEventListener('contextmenu', handlePreviewContextMenu);
+canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
 $('#avatarMessage').addEventListener('input', handleAvatarMessageInput);
 $('#avatarBubbleColor').addEventListener('input', handleAvatarStyleInput);
@@ -916,59 +906,7 @@ function generateImage() {
 }
 
 
-function resetPreviewTouchState() {
-  previewTouchStartAt = 0;
-  previewTouchMoved = false;
-}
-
-function triggerPreviewSave() {
-  const download = $('#download');
-  if (download.classList.contains('disabled') || !state.downloadBlob) return;
-  const now = performance.now();
-  if (previewSaveTriggeredAt && now - previewSaveTriggeredAt < PREVIEW_SAVE_DEBOUNCE_MS) {
-    return;
-  }
-  previewSaveTriggeredAt = now;
-  download.click();
-}
-
-function handlePreviewTouchStart(event) {
-  if (!isSmartphoneDevice()) return;
-  if (event.touches.length !== 1) {
-    resetPreviewTouchState();
-    return;
-  }
-  previewTouchStartAt = performance.now();
-  previewTouchMoved = false;
-}
-
-function handlePreviewTouchMove() {
-  previewTouchMoved = true;
-}
-
-function handlePreviewTouchEnd(event) {
-  if (!isSmartphoneDevice()) return;
-  const startedAt = previewTouchStartAt;
-  const moved = previewTouchMoved;
-  resetPreviewTouchState();
-  if (!startedAt || moved) return;
-  const duration = performance.now() - startedAt;
-  if (duration < LONG_PRESS_SAVE_MS) return;
-  event.preventDefault();
-  triggerPreviewSave();
-}
-
-function handlePreviewTouchCancel() {
-  resetPreviewTouchState();
-}
-
-function handlePreviewContextMenu(event) {
-  if (!isSmartphoneDevice()) return;
-  event.preventDefault();
-  triggerPreviewSave();
-}
-
-async function savePng(event = { preventDefault() {} }) {
+async function savePng(event) {
   const download = $('#download');
   if (download.classList.contains('disabled') || !state.downloadBlob) {
     event.preventDefault();
