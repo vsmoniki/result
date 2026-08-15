@@ -43,7 +43,7 @@ const AVATAR_TEXT_COLOR_KEY = 'avatarTextColor';
 const FTP_SETTING_KEY = 'ftpSetting';
 const MAX_HR_SETTING_KEY = 'maxHrSetting';
 const WEIGHT_SETTING_KEY = 'weightSetting';
-const HEART_LINE_AMPLITUDE_SCALE = 0.9;
+const HEART_LINE_AMPLITUDE_SCALE = 0.8;
 const FAN_TOOL_MARK_LINES = ['Unofficial Fan Tool', 'by Moniki Lab'];
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
@@ -1625,8 +1625,10 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
   );
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
   const { min: heartLineMin, max: heartLineMax } = getHeartLineRange(metrics.maxHeartRate, maxHrSetting);
+  // 0bpm がグラフ枠の一番下（パワーの棒グラフと同じ基準線）に来るよう、
+  // 描画領域の下端を枠の底に合わせる。
   const heartLineY = y + 28;
-  const heartLineHeight = height - 84;
+  const heartLineHeight = height - 28;
   drawSeries(
     hrs,
     x,
