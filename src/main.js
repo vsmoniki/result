@@ -1,6 +1,7 @@
 import FitParser from 'fit-file-parser';
 import { calculateNormalizedPower, calculateStressPoints } from './sp.js';
 import { titleFromFileName } from './ride-title.js';
+import { getHeartLineRange } from './heart-line-range.js';
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -1623,8 +1624,11 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
     baseShadowWidth * lineWidthMultiplier,
   );
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
-  const heartLineMin = Math.max(0, Math.min(metrics.avgHeartRate - 50, metrics.maxHeartRate - 92));
-  const heartLineMax = Math.max(maxHrSetting * 0.78, metrics.maxHeartRate + 12);
+  const { min: heartLineMin, max: heartLineMax } = getHeartLineRange(
+    metrics.avgHeartRate,
+    metrics.maxHeartRate,
+    maxHrSetting,
+  );
   const heartLineY = y + 28;
   const heartLineHeight = height - 84;
   drawSeries(
