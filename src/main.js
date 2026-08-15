@@ -43,7 +43,7 @@ const AVATAR_TEXT_COLOR_KEY = 'avatarTextColor';
 const FTP_SETTING_KEY = 'ftpSetting';
 const MAX_HR_SETTING_KEY = 'maxHrSetting';
 const WEIGHT_SETTING_KEY = 'weightSetting';
-const HEART_LINE_AMPLITUDE_SCALE = 0.8;
+const HEART_LINE_AMPLITUDE_SCALE = 0.9;
 const FAN_TOOL_MARK_LINES = ['Unofficial Fan Tool', 'by Moniki Lab'];
 const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
@@ -1341,9 +1341,6 @@ function drawFinishResult(metrics, weight) {
 
   roundRect(ctx, 52, 506, 366, 73, 8, '#f5f5f5');
   roundRect(ctx, 60, 514, 350, 58, 4, '#ff5b1a');
-  ctx.fillStyle = 'rgba(255,255,255,.42)';
-  ctx.font = '600 12px system-ui, sans-serif';
-  FAN_TOOL_MARK_LINES.forEach((line, index) => ctx.fillText(line, 235, 462 + index * 17));
 
   ctx.font = '900 30px system-ui, sans-serif';
   ctx.fillStyle = '#fff';
