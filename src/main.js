@@ -1341,9 +1341,6 @@ function drawFinishResult(metrics, weight) {
 
   roundRect(ctx, 52, 506, 366, 73, 8, '#f5f5f5');
   roundRect(ctx, 60, 514, 350, 58, 4, '#ff5b1a');
-  ctx.fillStyle = 'rgba(255,255,255,.42)';
-  ctx.font = '600 12px system-ui, sans-serif';
-  FAN_TOOL_MARK_LINES.forEach((line, index) => ctx.fillText(line, 235, 462 + index * 17));
 
   ctx.font = '900 30px system-ui, sans-serif';
   ctx.fillStyle = '#fff';
