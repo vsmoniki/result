@@ -1624,11 +1624,7 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
     baseShadowWidth * lineWidthMultiplier,
   );
   const hrs = downsampleSeries(rollingHeartRate(metrics.records, heartWindow), maxSamples);
-  const { min: heartLineMin, max: heartLineMax } = getHeartLineRange(
-    metrics.avgHeartRate,
-    metrics.maxHeartRate,
-    maxHrSetting,
-  );
+  const { min: heartLineMin, max: heartLineMax } = getHeartLineRange(metrics.maxHeartRate, maxHrSetting);
   const heartLineY = y + 28;
   const heartLineHeight = height - 84;
   drawSeries(
@@ -1716,10 +1712,11 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
+// 下端(min)を描画領域の一番下に固定したまま振れ幅だけを圧縮する。
+// 中央基準で縮めると min が下端から浮いてしまうため、下端を基準にする。
 function getSeriesY(value, y, height, max, min = 0, amplitudeScale = 1) {
-  const rawY = y + height - ((value - min) / Math.max(1, max - min)) * height;
-  const centerY = y + height / 2;
-  return centerY + (rawY - centerY) * amplitudeScale;
+  const ratio = (value - min) / Math.max(1, max - min);
+  return y + height - ratio * height * amplitudeScale;
 }
 
 function getPowerLineY(value, y, height, max, drawHeight = height - 58) {
