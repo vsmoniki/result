@@ -1951,6 +1951,36 @@ function roundedLeftRect(context, x, y, width, height, radius, fillStyle) {
   context.fill();
 }
 
+// --- Auto-update: reload once when a newer build is deployed -----------
+// The running bundle knows its own build ID (__APP_VERSION__, injected by
+// vite.config.js). version.json is emitted next to the built site on every
+// deploy and fetched with no-store, so a mismatch means this page is a
+// cached old version. A timestamp guard prevents reload loops.
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null;
+const VERSION_RELOAD_KEY = 'appVersionReloadAt';
+
+async function checkForAppUpdate() {
+  if (!APP_VERSION) return;
+  try {
+    const response = await fetch('./version.json', { cache: 'no-store' });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!data?.version || data.version === APP_VERSION) return;
+    let lastReloadAt = 0;
+    try { lastReloadAt = Number(sessionStorage.getItem(VERSION_RELOAD_KEY)) || 0; } catch {}
+    if (Date.now() - lastReloadAt < 30_000) return;
+    try { sessionStorage.setItem(VERSION_RELOAD_KEY, String(Date.now())); } catch {}
+    window.location.reload();
+  } catch {
+    // Offline or dev server without version.json: stay on this version.
+  }
+}
+
+checkForAppUpdate();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkForAppUpdate();
+});
+
 syncGraphSmoothnessSliderDefault();
 syncPowerGraphHeightSliderDefault();
 syncGraphLineWidthSliderDefault();
