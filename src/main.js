@@ -62,16 +62,42 @@ const REPORT_NUMBER_FONT = "'Barlow', 'M PLUS Rounded 1c', 'Arial Black', 'Arial
 // Bundled webfonts (Fontsource) keep the generated images identical on
 // iPhone / Windows / Android instead of falling back to per-OS fonts.
 // generateImage() waits for these faces before drawing real output.
+// The loads carry representative sample text: Fontsource splits the
+// Japanese face into unicode-range subsets, and document.fonts.load only
+// guarantees the subsets covering the given text — loading with the
+// default sample would leave title/label glyphs to the fallback fonts.
+const FONT_SAMPLE_DIGITS = '0123456789:.,';
+const FONT_SAMPLE_JA = 'ライドレポート完走タイムパワー心拍数分布数値あいうえお伊豆峠閉じるBESbswy0123456789';
 const fontsReadyPromise = (typeof document !== 'undefined' && document.fonts?.load)
   ? Promise.all([
-    document.fonts.load('800 27px "M PLUS Rounded 1c"'),
-    document.fonts.load('700 12px "M PLUS Rounded 1c"'),
-    document.fonts.load('800 32px "Barlow"'),
-    document.fonts.load('700 20px "Barlow"'),
+    document.fonts.load('800 27px "M PLUS Rounded 1c"', FONT_SAMPLE_JA),
+    document.fonts.load('700 12px "M PLUS Rounded 1c"', FONT_SAMPLE_JA),
+    document.fonts.load('800 32px "Barlow"', FONT_SAMPLE_DIGITS),
+    document.fonts.load('700 20px "Barlow"', FONT_SAMPLE_DIGITS),
   ]).catch(() => {})
   : Promise.resolve();
 let appFontsReady = false;
 fontsReadyPromise.then(() => { appFontsReady = true; });
+
+// Wait for the static faces plus, when given, the subsets covering the
+// exact extra text (the current ride title). Never blocks forever: if the
+// fonts do not arrive within ~1.5s we draw with fallbacks, as before.
+async function ensureDrawingFonts(extraText = '') {
+  if (typeof document === 'undefined' || !document.fonts?.load) return;
+  try {
+    const loads = [fontsReadyPromise];
+    if (extraText) {
+      loads.push(document.fonts.load('800 27px "M PLUS Rounded 1c"', extraText).catch(() => {}));
+      loads.push(document.fonts.load('700 12px "M PLUS Rounded 1c"', extraText).catch(() => {}));
+    }
+    await Promise.race([
+      Promise.all(loads),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
+  } catch {
+    // Font loading is best-effort; fall through and draw anyway.
+  }
+}
 const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = $('#fitFile');
@@ -928,9 +954,11 @@ function getMode() {
 }
 
 async function generateImage() {
-  // Never draw final output with fallback fonts: on first use, wait until
-  // the bundled faces are loaded, then proceed with the current inputs.
-  if (!appFontsReady) await fontsReadyPromise;
+  // Never draw final output with fallback fonts when they can be helped:
+  // wait for the bundled faces, including the subsets covering the exact
+  // glyphs of the current ride title, then proceed with the current inputs.
+  const titleForFonts = $('#rideTitle')?.value?.trim() || '';
+  await ensureDrawingFonts(titleForFonts);
   const mode = getMode();
   if (state.isLoadingFile) {
     setStatus('ファイルを読み込み中です。完了してから画像を作成してください。', true);
@@ -1190,7 +1218,7 @@ function average(values) {
   return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : 0;
 }
 
-function reportFont(size, weight = 900, family = REPORT_FONT) {
+function reportFont(size, weight = 800, family = REPORT_FONT) {
   return `${weight} ${size}px ${family}`;
 }
 
@@ -1313,12 +1341,15 @@ function drawHeader(metrics, { title, level, sp, avatarMessage, avatarBubbleColo
   }
   ctx.fillText(displayTitle, 27, 72);
 
+  // Each stat owns the slot from its x to the next stat's x (SP runs to
+  // 912, just before the avatar); drawHeaderStat shrinks the value until
+  // icon + value + unit all fit inside the slot, gap included.
   const stats = [
-    { icon: 'bolt', value: formatInt(metrics.avgPower), unit: 'AVG', x: 37, maxWidth: 178 },
-    { icon: 'route', value: metrics.distanceKm.toFixed(1), unit: 'km', x: 240, maxWidth: 155 },
-    { icon: 'clock', value: formatDuration(metrics.timerSeconds), unit: 'ET', x: 414, maxWidth: 150 },
-    { icon: null, value: formatInt(metrics.calories), unit: 'KCAL', x: 610, maxWidth: 155 },
-    { icon: null, value: formatInt(sp), unit: 'SP', x: 817, maxWidth: 92, outline: true },
+    { icon: 'bolt', value: formatInt(metrics.avgPower), unit: 'AVG', x: 37, slotEnd: 240 },
+    { icon: 'route', value: metrics.distanceKm.toFixed(1), unit: 'km', x: 240, slotEnd: 414 },
+    { icon: 'clock', value: formatDuration(metrics.timerSeconds), unit: '', x: 414, slotEnd: 610 },
+    { icon: null, value: formatInt(metrics.calories), unit: 'KCAL', x: 610, slotEnd: 817 },
+    { icon: null, value: formatInt(sp), unit: 'SP', x: 817, slotEnd: 912, outline: true },
   ];
   drawLevelProgress(level);
   drawAvatar(avatarMessage, avatarBubbleColor, avatarTextColor);
@@ -1336,17 +1367,27 @@ function drawReportFanToolMark() {
 }
 
 
-function drawHeaderStat({ icon, value, unit, x, maxWidth, outline = false }) {
+function drawHeaderStat({ icon, value, unit, x, slotEnd, outline = false }) {
   ctx.fillStyle = '#24242a';
   ctx.textAlign = 'left';
   const valueX = icon ? x + 32 : x;
   if (icon) drawHeaderIcon(icon, x, 105);
   const text = String(value);
+  // Budget the whole stat against its slot: icon space + value + gap +
+  // unit (measured at the font the unit is actually drawn with). A wide
+  // value like 18:56:13 shrinks until the unit still ends before the next
+  // stat starts, instead of running straight into it. A stat with an empty
+  // unit (the clock) draws no unit and reserves no width for one, so the
+  // freed space counts toward the value's shrink decision.
+  const slotWidth = slotEnd - 14 - x;
+  const iconWidth = icon ? 32 : 0;
+  ctx.font = reportFont(12);
+  const unitWidth = unit ? ctx.measureText(unit).width + 5 : 0;
   let fontSize = 39;
-  ctx.font = reportFont(fontSize, 900, REPORT_NUMBER_FONT);
-  while (ctx.measureText(text).width > maxWidth && fontSize > 29) {
+  ctx.font = reportFont(fontSize, 800, REPORT_NUMBER_FONT);
+  while (fontSize > 22 && iconWidth + ctx.measureText(text).width + unitWidth > slotWidth) {
     fontSize -= 1;
-    ctx.font = reportFont(fontSize, 900, REPORT_NUMBER_FONT);
+    ctx.font = reportFont(fontSize, 800, REPORT_NUMBER_FONT);
   }
   if (outline) {
     ctx.save();
@@ -1357,9 +1398,11 @@ function drawHeaderStat({ icon, value, unit, x, maxWidth, outline = false }) {
     ctx.restore();
   }
   ctx.fillText(text, valueX, 118);
-  const unitX = valueX + ctx.measureText(text).width + 5;
-  ctx.font = reportFont(12);
-  ctx.fillText(unit, unitX, 116);
+  if (unit) {
+    const unitX = valueX + ctx.measureText(text).width + 5;
+    ctx.font = reportFont(12);
+    ctx.fillText(unit, unitX, 116);
+  }
 }
 
 function drawHeaderIcon(type, x, y) {
@@ -1778,13 +1821,24 @@ function drawDistributionPanels(metrics, options) {
   ctx.textAlign = 'center';
   ctx.fillText('パワー分布', 251, 452);
   ctx.fillText('心拍数分布', 749, 452);
-  drawPowerHistogram(metrics, 34, 464, 436, 112, 610, panelBottomY);
-  drawHeartHistogram(metrics, options, 525, 452, 449, 124, 610, panelBottomY);
+  drawPowerHistogram(metrics, 34, 464, 436, 112, 610, panelBottomY, 27, 449);
+  drawHeartHistogram(metrics, options, 525, 452, 449, 124, 610, panelBottomY, 525, 449);
   drawDistributionUnit(251, 628, 'ワット');
   drawDistributionUnit(749, 628, 'bpm');
 }
 
-function drawPowerHistogram(metrics, x, y, width, height, axisY, panelBottomY) {
+// Clamp an AVG marker/badge into its panel: the marker line stays within
+// [panelX, panelX + panelWidth] and the badge (40 wide, drawn centered on
+// its x) is shifted so the whole box remains inside the panel. Averages
+// below the axis minimum (e.g. avgPower < 100) otherwise push the marker
+// and badge off the panel's left edge.
+function clampAvgMarker(rawX, panelX, panelWidth) {
+  const lineX = Math.max(panelX, Math.min(panelX + panelWidth, rawX));
+  const badgeX = Math.max(panelX + 20, Math.min(panelX + panelWidth - 20, lineX));
+  return { lineX, badgeX };
+}
+
+function drawPowerHistogram(metrics, x, y, width, height, axisY, panelBottomY, panelX = x, panelWidth = width) {
   const powerValues = metrics.records.map((r) => r.power).filter((value) => Number.isFinite(value) && value >= 100);
   const maxPowerAxis = getPowerHistogramMax(powerValues);
   const bins = makeHistogram(powerValues, 100, maxPowerAxis, 36);
@@ -1797,7 +1851,8 @@ function drawPowerHistogram(metrics, x, y, width, height, axisY, panelBottomY) {
     roundedTopRect(ctx, x + i * (width / bins.length), baselineY - barH, barW, barH, 10, '#fff');
   });
   drawAxisLabels(x, axisY, width, makeLinearLabels(100, maxPowerAxis, 11));
-  const avgX = x + ((metrics.avgPower - 100) / Math.max(1, maxPowerAxis - 100)) * width;
+  const rawAvgX = x + ((metrics.avgPower - 100) / Math.max(1, maxPowerAxis - 100)) * width;
+  const { lineX: avgX, badgeX: avgBadgeX } = clampAvgMarker(rawAvgX, panelX, panelWidth);
   ctx.strokeStyle = '#8c8f93';
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -1805,7 +1860,7 @@ function drawPowerHistogram(metrics, x, y, width, height, axisY, panelBottomY) {
   ctx.lineTo(avgX, baselineY);
   ctx.stroke();
   badge(`AVG
-${formatInt(metrics.avgPower)}`, avgX, y + 18);
+${formatInt(metrics.avgPower)}`, avgBadgeX, y + 18);
 }
 
 function getPowerHistogramMax(values) {
@@ -1814,7 +1869,7 @@ function getPowerHistogramMax(values) {
   return Math.min(2000, Math.ceil(maxValue / 100) * 100);
 }
 
-function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height, axisY, panelBottomY) {
+function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height, axisY, panelBottomY, panelX = x, panelWidth = width) {
   const displayMinHr = Math.max(40, Math.round((maxHrSetting * 0.32) / 5) * 5);
   const zoneThresholds = [
     0.5 * maxHrSetting,
@@ -1896,7 +1951,7 @@ function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height, axis
     roundedTopRect(ctx, barX, baselineY - barH, barW, barH, 10, '#fff');
   });
   drawAxisLabelsAt(axisY, axisLabels);
-  const avgX = hrToX(metrics.avgHeartRate);
+  const { lineX: avgX, badgeX: avgBadgeX } = clampAvgMarker(hrToX(metrics.avgHeartRate), panelX, panelWidth);
   ctx.strokeStyle = '#8c8f93';
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -1904,7 +1959,7 @@ function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height, axis
   ctx.lineTo(avgX, baselineY);
   ctx.stroke();
   badge(`AVG
-${formatInt(metrics.avgHeartRate)}`, avgX, y + 28);
+${formatInt(metrics.avgHeartRate)}`, avgBadgeX, y + 28);
 }
 
 function makeLinearLabels(min, max, count) {
@@ -1937,14 +1992,14 @@ function makeMappedHistogram(values, bins, mapValueToX, x, width) {
 
 function drawAxisLabels(x, y, width, labels) {
   ctx.fillStyle = '#1c1c1c';
-  ctx.font = reportFont(11, 900, REPORT_NUMBER_FONT);
+  ctx.font = reportFont(11, 800, REPORT_NUMBER_FONT);
   ctx.textAlign = 'center';
   labels.forEach((label, i) => ctx.fillText(label, x + (i / (labels.length - 1)) * width, y));
 }
 
 function drawAxisLabelsAt(y, labels) {
   ctx.fillStyle = '#1c1c1c';
-  ctx.font = reportFont(11, 900, REPORT_NUMBER_FONT);
+  ctx.font = reportFont(11, 800, REPORT_NUMBER_FONT);
   ctx.textAlign = 'center';
   labels.forEach(({ label, x }) => ctx.fillText(label, x, y));
 }
@@ -1963,7 +2018,7 @@ function badge(text, x, y) {
   ctx.textAlign = 'center';
   ctx.font = reportFont(9);
   ctx.fillText(lines[0], x, y - 7);
-  ctx.font = reportFont(17, 900, REPORT_NUMBER_FONT);
+  ctx.font = reportFont(17, 800, REPORT_NUMBER_FONT);
   ctx.fillText(lines[1], x, y + 11);
 }
 
