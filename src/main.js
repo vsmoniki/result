@@ -1,4 +1,8 @@
 import FitParser from 'fit-file-parser';
+import '@fontsource/m-plus-rounded-1c/700.css';
+import '@fontsource/m-plus-rounded-1c/800.css';
+import '@fontsource/barlow/700.css';
+import '@fontsource/barlow/800.css';
 import { calculateNormalizedPower, calculateStressPoints } from './sp.js';
 import { titleFromFileName } from './ride-title.js';
 import { getHeartLineRange } from './heart-line-range.js';
@@ -28,6 +32,13 @@ let pickerActivatedAt = 0;
 const PICKER_TIMEOUT_MS = 30_000;
 const DEFAULT_CANVAS_WIDTH = 1920;
 const DEFAULT_CANVAS_HEIGHT = 1080;
+// Exported images are drawn at 2x the logical size (supersampling) so text
+// and graph lines stay sharp; all drawing code keeps logical coordinates.
+const EXPORT_SCALE = 2;
+const REPORT_LOGICAL_WIDTH = 1000;
+const REPORT_LOGICAL_HEIGHT = 642;
+const FINISH_LOGICAL_WIDTH = 470;
+const FINISH_LOGICAL_HEIGHT = 584;
 const MIN_GRAPH_SMOOTHNESS = -20;
 const MAX_GRAPH_SMOOTHNESS = 100;
 const LEGACY_GRAPH_SMOOTHNESS = 0;
@@ -45,8 +56,22 @@ const MAX_HR_SETTING_KEY = 'maxHrSetting';
 const WEIGHT_SETTING_KEY = 'weightSetting';
 const HEART_LINE_AMPLITUDE_SCALE = 0.9;
 const FAN_TOOL_MARK_LINES = ['Unofficial Fan Tool', 'by Moniki Lab'];
-const REPORT_FONT = "'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
-const REPORT_NUMBER_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
+const REPORT_FONT = "'M PLUS Rounded 1c', 'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
+const REPORT_NUMBER_FONT = "'Barlow', 'M PLUS Rounded 1c', 'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
+
+// Bundled webfonts (Fontsource) keep the generated images identical on
+// iPhone / Windows / Android instead of falling back to per-OS fonts.
+// generateImage() waits for these faces before drawing real output.
+const fontsReadyPromise = (typeof document !== 'undefined' && document.fonts?.load)
+  ? Promise.all([
+    document.fonts.load('800 27px "M PLUS Rounded 1c"'),
+    document.fonts.load('700 12px "M PLUS Rounded 1c"'),
+    document.fonts.load('800 32px "Barlow"'),
+    document.fonts.load('700 20px "Barlow"'),
+  ]).catch(() => {})
+  : Promise.resolve();
+let appFontsReady = false;
+fontsReadyPromise.then(() => { appFontsReady = true; });
 const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = $('#fitFile');
@@ -902,7 +927,10 @@ function getMode() {
   return document.querySelector('input[name="mode"]:checked').value;
 }
 
-function generateImage() {
+async function generateImage() {
+  // Never draw final output with fallback fonts: on first use, wait until
+  // the bundled faces are loaded, then proceed with the current inputs.
+  if (!appFontsReady) await fontsReadyPromise;
   const mode = getMode();
   if (state.isLoadingFile) {
     setStatus('ファイルを読み込み中です。完了してから画像を作成してください。', true);
@@ -1050,6 +1078,11 @@ function extractMetrics(data, sourceLabel = 'FIT') {
     ? maxElapsed + data.sampleIntervalSeconds
     : maxElapsed;
   const lastDistance = [...records].reverse().find((r) => Number.isFinite(r.distance))?.distance ?? 0;
+  // Session total_distance parses in the same unit (km) as record distance
+  // under the app's parser options (verified with a synthetic FIT fixture),
+  // and is the device's official total — prefer it when present.
+  const sessionDistance = data.sessions?.[0]?.total_distance;
+  const distanceKm = (Number.isFinite(sessionDistance) && sessionDistance > 0) ? sessionDistance : lastDistance;
   const avgPower = average(powers);
   const maxPower = powers.length ? Math.max(...powers) : 0;
   const maxHeartRate = heartRates.length ? Math.max(...heartRates) : 0;
@@ -1064,7 +1097,7 @@ function extractMetrics(data, sourceLabel = 'FIT') {
     records,
     duration,
     timerSeconds,
-    distanceKm: lastDistance,
+    distanceKm,
     avgPower,
     maxPower,
     maxHeartRate,
@@ -1164,6 +1197,7 @@ function reportFont(size, weight = 900, family = REPORT_FONT) {
 function drawPlaceholder() {
   canvas.width = DEFAULT_CANVAS_WIDTH;
   canvas.height = DEFAULT_CANVAS_HEIGHT;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   const w = canvas.width;
   const h = canvas.height;
   ctx.clearRect(0, 0, w, h);
@@ -1178,46 +1212,68 @@ function drawPlaceholder() {
   ctx.fillText('FITファイルを選択して画像を作成', w / 2, h / 2);
 }
 
+function drawFinishCrown(cx, cy) {
+  // Simple 3-point crown drawn as a vector so it renders identically on
+  // every platform (the ♛ text glyph depends on OS fonts).
+  ctx.save();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.moveTo(cx - 22, cy + 10);
+  ctx.lineTo(cx - 18, cy - 12);
+  ctx.lineTo(cx - 7, cy + 2);
+  ctx.lineTo(cx, cy - 16);
+  ctx.lineTo(cx + 7, cy + 2);
+  ctx.lineTo(cx + 18, cy - 12);
+  ctx.lineTo(cx + 22, cy + 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(cx - 22, cy + 14, 44, 6, 3);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawFinishResult(metrics, weight) {
-  canvas.width = 470;
-  canvas.height = 584;
-  roundRect(ctx, 0, 0, 470, 584, 0, '#075f9f');
+  canvas.width = FINISH_LOGICAL_WIDTH * EXPORT_SCALE;
+  canvas.height = FINISH_LOGICAL_HEIGHT * EXPORT_SCALE;
+  ctx.setTransform(EXPORT_SCALE, 0, 0, EXPORT_SCALE, 0, 0);
+  roundRect(ctx, 0, 0, FINISH_LOGICAL_WIDTH, FINISH_LOGICAL_HEIGHT, 0, '#075f9f');
   ctx.textAlign = 'center';
   ctx.fillStyle = '#fff';
-  ctx.font = '700 48px system-ui, sans-serif';
-  ctx.fillText('♛', 235, 84);
-  ctx.font = '900 38px system-ui, sans-serif';
+  drawFinishCrown(235, 66);
+  ctx.font = reportFont(38, 800);
   ctx.fillText('完走タイム', 235, 142);
-  ctx.font = '900 86px system-ui, sans-serif';
-  ctx.fillText(formatDuration(metrics.duration), 235, 260);
-  ctx.font = '400 20px system-ui, sans-serif';
+  ctx.font = reportFont(86, 800, REPORT_NUMBER_FONT);
+  ctx.fillText(formatDuration(metrics.timerSeconds), 235, 260);
+  ctx.font = reportFont(20, 700);
   ctx.fillText('パワー', 235, 330);
 
   const labels = [['20 分', 1200], ['5 分', 300], ['1 分', 60], ['15 秒', 15]];
   labels.forEach(([label, seconds], index) => {
     const x = 95 + index * 90;
-    ctx.font = '400 36px system-ui, sans-serif';
+    ctx.font = reportFont(36, 700, REPORT_NUMBER_FONT);
     ctx.fillText(calculateWattsPerKg(metrics.bestPower[seconds], weight).toFixed(1), x, 384);
-    ctx.font = '400 15px system-ui, sans-serif';
+    ctx.font = reportFont(15, 700);
     ctx.fillText(label, x, 420);
   });
 
   roundRect(ctx, 52, 506, 366, 73, 8, '#f5f5f5');
   roundRect(ctx, 60, 514, 350, 58, 4, '#ff5b1a');
 
-  ctx.font = '900 30px system-ui, sans-serif';
+  ctx.font = reportFont(30, 800);
   ctx.fillStyle = '#fff';
   ctx.fillText('閉じる', 235, 553);
 }
 
 function drawRideReport(metrics, options) {
-  canvas.width = 1000;
-  canvas.height = 642;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.width = REPORT_LOGICAL_WIDTH * EXPORT_SCALE;
+  canvas.height = REPORT_LOGICAL_HEIGHT * EXPORT_SCALE;
+  ctx.setTransform(EXPORT_SCALE, 0, 0, EXPORT_SCALE, 0, 0);
+  ctx.clearRect(0, 0, REPORT_LOGICAL_WIDTH, REPORT_LOGICAL_HEIGHT);
   ctx.fillStyle = '#f6f6f4';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, REPORT_LOGICAL_WIDTH, REPORT_LOGICAL_HEIGHT);
 
-  roundRect(ctx, 0, 0, 1000, 642, 8, '#f6f6f4');
+  roundRect(ctx, 0, 0, REPORT_LOGICAL_WIDTH, REPORT_LOGICAL_HEIGHT, 8, '#f6f6f4');
   ctx.fillStyle = '#2d2d2d';
   ctx.fillRect(0, 0, 1000, 41);
   ctx.fillStyle = '#fff';
@@ -1237,15 +1293,32 @@ function drawRideReport(metrics, options) {
 function drawHeader(metrics, { title, level, sp, avatarMessage, avatarBubbleColor, avatarTextColor }) {
   ctx.fillStyle = '#27272b';
   ctx.textAlign = 'left';
-  ctx.font = reportFont(27, 950, REPORT_NUMBER_FONT);
-  ctx.fillText(title, 27, 72);
+  // Shrink the title to fit before the avatar/bubble area (which starts
+  // around x=736 at its widest); truncate with an ellipsis as a last resort
+  // so a long title can never slide under the avatar.
+  const TITLE_MAX_WIDTH = 695;
+  const TITLE_MIN_FONT_SIZE = 18;
+  let titleFontSize = 27;
+  ctx.font = reportFont(titleFontSize, 800, REPORT_NUMBER_FONT);
+  while (ctx.measureText(title).width > TITLE_MAX_WIDTH && titleFontSize > TITLE_MIN_FONT_SIZE) {
+    titleFontSize -= 1;
+    ctx.font = reportFont(titleFontSize, 800, REPORT_NUMBER_FONT);
+  }
+  let displayTitle = title;
+  if (ctx.measureText(displayTitle).width > TITLE_MAX_WIDTH) {
+    while (displayTitle.length > 1 && ctx.measureText(`${displayTitle}…`).width > TITLE_MAX_WIDTH) {
+      displayTitle = displayTitle.slice(0, -1);
+    }
+    displayTitle = `${displayTitle}…`;
+  }
+  ctx.fillText(displayTitle, 27, 72);
 
   const stats = [
-    { icon: 'bolt', value: Math.round(metrics.avgPower), unit: 'AVG', x: 37, maxWidth: 178 },
+    { icon: 'bolt', value: formatInt(metrics.avgPower), unit: 'AVG', x: 37, maxWidth: 178 },
     { icon: 'route', value: metrics.distanceKm.toFixed(1), unit: 'km', x: 240, maxWidth: 155 },
-    { icon: 'clock', value: formatReportDuration(metrics.duration), unit: 'ET', x: 414, maxWidth: 150 },
-    { icon: null, value: Math.round(metrics.calories), unit: 'KCAL', x: 610, maxWidth: 155 },
-    { icon: null, value: sp, unit: 'SP', x: 817, maxWidth: 92, outline: true },
+    { icon: 'clock', value: formatDuration(metrics.timerSeconds), unit: 'ET', x: 414, maxWidth: 150 },
+    { icon: null, value: formatInt(metrics.calories), unit: 'KCAL', x: 610, maxWidth: 155 },
+    { icon: null, value: formatInt(sp), unit: 'SP', x: 817, maxWidth: 92, outline: true },
   ];
   drawLevelProgress(level);
   drawAvatar(avatarMessage, avatarBubbleColor, avatarTextColor);
@@ -1336,13 +1409,10 @@ function drawLevelProgress(level) {
   ctx.fillStyle = '#fff';
   ctx.font = reportFont(12);
   ctx.textAlign = 'center';
-  ctx.fillText(`🚴 ${level}`, 58, 146);
+  ctx.fillText(`🚴 ${formatInt(level)}`, 58, 146);
+  // No XP data source exists, so the track stays a plain full track:
+  // no partial progress fill and no invented XP number.
   roundRect(ctx, 96, 133, 878, 16, 8, '#c9c9c9');
-  roundedLeftRect(ctx, 96, 133, 37, 16, 8, '#ff5b1a');
-  ctx.fillStyle = '#151515';
-  ctx.font = reportFont(12);
-  ctx.textAlign = 'right';
-  ctx.fillText('次のレベルまで 19192 XP', 966, 146);
 }
 
 function drawAvatar(message = DEFAULT_AVATAR_MESSAGE, bubbleColor = DEFAULT_AVATAR_BUBBLE_COLOR, textColor = DEFAULT_AVATAR_TEXT_COLOR) {
@@ -1373,9 +1443,16 @@ function drawAvatar(message = DEFAULT_AVATAR_MESSAGE, bubbleColor = DEFAULT_AVAT
   ctx.save();
   ctx.translate(944, 101);
   if (state.avatarImage) {
-    ctx.fillStyle = '#f6f6f4';
-    ctx.fillRect(-32, -41, 64, 64);
-    ctx.drawImage(state.avatarImage, -32, -41, 64, 64);
+    // Clip the uploaded image to the same circle as the default avatar's
+    // face (r=29 at this origin), with high-quality smoothing.
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, 29, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(state.avatarImage, -29, -29, 58, 58);
+    ctx.restore();
   } else {
     ctx.fillStyle = '#d9a47d';
     ctx.beginPath();
@@ -1504,30 +1581,31 @@ function drawTimeline(metrics, { ftp, maxHrSetting, graphSmoothness, powerGraphH
 
   ctx.restore();
 
-  if (maxDisplayedPower > 0) {
-    const peakDownsampledIndex = Math.min(powers.length - 1, Math.floor(maxDisplayedPowerIndex * powers.length / averagedPowers.length));
-    const maxPowerX = x + (peakDownsampledIndex + 0.5) * (width / Math.max(1, powers.length));
-    const maxPowerY = getPowerLineY(maxDisplayedPower, y, height, maxGraphPower, powerGraphDrawHeight);
-    const centerElapsed = metrics.records[maxDisplayedPowerIndex]?.elapsed;
-    const peakOneSec = metrics.records.reduce((max, record) => {
-      if (!Number.isFinite(record.power) || !Number.isFinite(record.elapsed) || !Number.isFinite(centerElapsed)) return max;
-      return Math.abs(record.elapsed - centerElapsed) <= powerWindow ? Math.max(max, record.power) : max;
-    }, metrics.records[maxDisplayedPowerIndex]?.power ?? maxDisplayedPower);
-    drawPeakLabel(`${Math.round(peakOneSec)}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22);
+  // Peak labels must describe the series actually drawn (rolling-averaged
+  // and downsampled), not raw 1-second record spikes the chart's own line
+  // never reaches.
+  const drawnPowerPeak = powers.reduce((peak, value, index) => (
+    Number.isFinite(value) && (!peak || value > peak.value) ? { value, index } : peak
+  ), null);
+  if (drawnPowerPeak && drawnPowerPeak.value > 0) {
+    const maxPowerX = x + (drawnPowerPeak.index + 0.5) * (width / Math.max(1, powers.length));
+    const maxPowerY = getPowerLineY(drawnPowerPeak.value, y, height, maxGraphPower, powerGraphDrawHeight);
+    drawPeakLabel(`${formatInt(drawnPowerPeak.value)}w`, maxPowerX, maxPowerY - 16, '#fff', '#ffb21a', y + 16, y + height - 22, x, x + width);
   }
-  const maxHeartRatePeak = findMaxHeartRateRecord(metrics.records);
-  if (maxHeartRatePeak) {
-    const hrDownsampledIndex = Math.min(hrs.length - 1, Math.floor(maxHeartRatePeak.index * hrs.length / metrics.records.length));
-    const maxHrX = x + (hrDownsampledIndex / Math.max(1, hrs.length - 1)) * width;
+  const drawnHrPeak = hrs.reduce((peak, value, index) => (
+    Number.isFinite(value) && (!peak || value > peak.value) ? { value, index } : peak
+  ), null);
+  if (drawnHrPeak) {
+    const maxHrX = x + (drawnHrPeak.index / Math.max(1, hrs.length - 1)) * width;
     const maxHrY = getSeriesY(
-      maxHeartRatePeak.heartRate,
+      drawnHrPeak.value,
       heartLineY,
       heartLineHeight,
       heartLineMax,
       heartLineMin,
       HEART_LINE_AMPLITUDE_SCALE,
     );
-    drawPeakLabel(`${Math.round(maxHeartRatePeak.heartRate)}bpm`, maxHrX, maxHrY - 16, '#fff', '#e11f28', y + 16, y + height - 22);
+    drawPeakLabel(`${formatInt(drawnHrPeak.value)}bpm`, maxHrX, maxHrY - 16, '#fff', '#e11f28', y + 16, y + height - 22, x, x + width);
   }
 }
 
@@ -1543,17 +1621,6 @@ function findMaxPowerRecord(records) {
   return peak;
 }
 
-
-function findMaxHeartRateRecord(records) {
-  let peak = null;
-  records.forEach((record, index) => {
-    if (!Number.isFinite(record?.heartRate)) return;
-    if (!peak || record.heartRate > peak.heartRate) {
-      peak = { record, index, heartRate: record.heartRate };
-    }
-  });
-  return peak;
-}
 
 function getTimelineRecordX(record, records, x, width) {
   if (!record || !records.length) return x;
@@ -1593,8 +1660,8 @@ function getPowerGraphDrawHeight(height, powerGraphHeight) {
 
 function drawPowerLine(values, x, y, width, height, max, drawHeight = height - 58, lineWidth = 1.7, shadowWidth = 3.6) {
   ctx.save();
-  ctx.lineCap = 'butt';
-  ctx.lineJoin = 'miter';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   drawPowerLineStroke(values, x, y, width, height, max, drawHeight, 'rgba(45,45,45,.5)', shadowWidth);
   drawPowerLineStroke(values, x, y, width, height, max, drawHeight, '#f8f8f2', lineWidth);
   ctx.restore();
@@ -1659,17 +1726,21 @@ function drawSeries(values, x, y, width, height, max, color, lineWidth, min = 0,
   ctx.stroke();
 }
 
-function drawPeakLabel(text, x, y, color, pointerColor, minY = -Infinity, maxY = Infinity) {
+function drawPeakLabel(text, x, y, color, pointerColor, minY = -Infinity, maxY = Infinity, minX = -Infinity, maxX = Infinity) {
   const labelY = Math.max(minY, Math.min(maxY, y));
-  ctx.fillStyle = color;
   ctx.font = reportFont(13);
+  // Keep the whole label (text + pointer) inside the panel horizontally so
+  // a peak at the right edge does not clip.
+  const halfWidth = ctx.measureText(text).width / 2 + 4;
+  const labelX = Math.max(minX + halfWidth, Math.min(maxX - halfWidth, x));
+  ctx.fillStyle = color;
   ctx.textAlign = 'center';
-  ctx.fillText(text, x, labelY);
+  ctx.fillText(text, labelX, labelY);
   ctx.fillStyle = pointerColor;
   ctx.beginPath();
-  ctx.moveTo(x - 4, labelY + 6);
-  ctx.lineTo(x + 4, labelY + 6);
-  ctx.lineTo(x, labelY + 13);
+  ctx.moveTo(labelX - 4, labelY + 6);
+  ctx.lineTo(labelX + 4, labelY + 6);
+  ctx.lineTo(labelX, labelY + 13);
   ctx.closePath();
   ctx.fill();
 }
@@ -1734,7 +1805,7 @@ function drawPowerHistogram(metrics, x, y, width, height, axisY, panelBottomY) {
   ctx.lineTo(avgX, baselineY);
   ctx.stroke();
   badge(`AVG
-${Math.round(metrics.avgPower)}`, avgX, y + 18);
+${formatInt(metrics.avgPower)}`, avgX, y + 18);
 }
 
 function getPowerHistogramMax(values) {
@@ -1788,8 +1859,15 @@ function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height, axis
   };
   const axisLabels = Array.from({ length: 11 }, (_, index) => {
     const labelX = x + (index / 10) * width;
-    return { label: String(Math.round(xToHr(labelX))), x: labelX };
+    return { label: formatInt(xToHr(labelX)), x: labelX };
   });
+  // Clip the zone backgrounds to the panel's rounded corners (panel is
+  // drawn in drawDistributionPanels at (x, panelBottomY - 158, width, 158)
+  // with radius 9) so their square bottom corners do not poke out.
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, panelBottomY - 158, width, 158, 9);
+  ctx.clip();
   let zoneX = zoneStartX;
   colors.forEach((color, i) => {
     const start = zoneX;
@@ -1805,6 +1883,7 @@ function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height, axis
     ctx.fillText(`Z${i + 1}`, start + (end - start) / 2, y + 17);
     ctx.globalAlpha = 1;
   });
+  ctx.restore();
   const values = metrics.records.map((r) => r.heartRate).filter(Number.isFinite);
   const bins = makeMappedHistogram(values, 30, (value) => hrToX(value), x, width);
   const maxBin = Math.max(...bins, 1);
@@ -1825,13 +1904,13 @@ function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height, axis
   ctx.lineTo(avgX, baselineY);
   ctx.stroke();
   badge(`AVG
-${Math.round(metrics.avgHeartRate)}`, avgX, y + 28);
+${formatInt(metrics.avgHeartRate)}`, avgX, y + 28);
 }
 
 function makeLinearLabels(min, max, count) {
   return Array.from({ length: count }, (_, index) => {
     const value = min + ((max - min) * index) / Math.max(1, count - 1);
-    return String(Math.round(value));
+    return formatInt(value);
   });
 }
 
@@ -1898,21 +1977,21 @@ function zoneColor(power, ftp) {
   return '#bf2b20';
 }
 
+// Shared integer formatter for displayed numbers: thousands separators
+// (1,200 etc.) via ja-JP grouping. Decimals (distance, W/kg) and clock
+// strings do not go through this.
+const intFormatter = new Intl.NumberFormat('ja-JP');
+function formatInt(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? intFormatter.format(Math.round(num)) : String(value);
+}
+
 function formatDuration(seconds) {
   const total = Math.max(0, Math.round(seconds));
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
   if (h) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-function formatReportDuration(seconds) {
-  const total = Math.max(0, Math.round(seconds));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  if (h) return `${h}:${String(m).padStart(2, '0')}`;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
@@ -1932,20 +2011,6 @@ function roundedTopRect(context, x, y, width, height, radius, fillStyle) {
   context.quadraticCurveTo(x, y, x + r, y);
   context.lineTo(x + width - r, y);
   context.quadraticCurveTo(x + width, y, x + width, y + r);
-  context.lineTo(x + width, y + height);
-  context.closePath();
-  context.fill();
-}
-
-function roundedLeftRect(context, x, y, width, height, radius, fillStyle) {
-  const r = Math.min(radius, width, height / 2);
-  context.fillStyle = fillStyle;
-  context.beginPath();
-  context.moveTo(x + width, y);
-  context.lineTo(x + r, y);
-  context.quadraticCurveTo(x, y, x, y + r);
-  context.lineTo(x, y + height - r);
-  context.quadraticCurveTo(x, y + height, x + r, y + height);
   context.lineTo(x + width, y + height);
   context.closePath();
   context.fill();
