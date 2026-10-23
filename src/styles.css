@@ -86,14 +86,6 @@ h1 {
   margin-bottom: 22px;
 }
 
-.controls.is-ftp-update {
-  grid-template-columns: minmax(220px, .75fr) minmax(320px, 1fr) auto;
-}
-
-.controls.is-ftp-update .actions {
-  align-self: end;
-}
-
 .file-drop {
   position: relative;
   display: grid;
@@ -177,8 +169,6 @@ h1 {
 }
 
 #finishInputs { grid-template-columns: minmax(160px, 220px); }
-
-#ftpUpdateInputs { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
 
 #reportInputs {
   grid-template-columns: repeat(2, minmax(150px, 1fr));
@@ -715,15 +705,6 @@ canvas {
   .controls,
   .form-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .controls.is-ftp-update,
-  #ftpUpdateInputs {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .controls.is-ftp-update .actions {
-    align-self: stretch;
   }
 
   .report-details-grid {

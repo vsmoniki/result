@@ -11,7 +11,7 @@
     "screenshot": "playwright screenshot --browser chromium --channel chrome http://localhost:5173/ /tmp/zwift-default-report.png"
   },
   "dependencies": {
-    "fit-file-parser": "2.3.3",
+    "fit-file-parser": "6.2.3",
     "vite": "latest"
   },
   "devDependencies": {
