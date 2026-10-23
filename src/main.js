@@ -3,6 +3,8 @@ import '@fontsource/m-plus-rounded-1c/700.css';
 import '@fontsource/m-plus-rounded-1c/800.css';
 import '@fontsource/barlow/700.css';
 import '@fontsource/barlow/800.css';
+import '@fontsource/noto-sans-jp/700.css';
+import '@fontsource/noto-sans-jp/800.css';
 import { calculateNormalizedPower, calculateStressPoints } from './sp.js';
 import { titleFromFileName } from './ride-title.js';
 import { getHeartLineRange } from './heart-line-range.js';
@@ -19,6 +21,7 @@ const state = {
   fileInputKey: null,
   autoRideTitle: '',
   isLoadingFile: false,
+  previewScrollArmed: true,
   graphSmoothnessTouched: false,
   powerGraphHeightTouched: false,
   graphLineWidthTouched: false,
@@ -57,6 +60,9 @@ const WEIGHT_SETTING_KEY = 'weightSetting';
 const HEART_LINE_AMPLITUDE_SCALE = 0.9;
 const FAN_TOOL_MARK_LINES = ['Unofficial Fan Tool', 'by Moniki Lab'];
 const REPORT_FONT = "'M PLUS Rounded 1c', 'Arial Rounded MT Bold', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
+// The finish-time panel mirrors official Zwift's gothic (non-rounded) look:
+// Japanese text uses a plain gothic stack while numbers stay in Barlow.
+const FINISH_FONT = "'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic UI', 'Yu Gothic', system-ui, sans-serif";
 const REPORT_NUMBER_FONT = "'Barlow', 'M PLUS Rounded 1c', 'Arial Black', 'Arial Rounded MT Bold', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif";
 
 // Bundled webfonts (Fontsource) keep the generated images identical on
@@ -74,6 +80,8 @@ const fontsReadyPromise = (typeof document !== 'undefined' && document.fonts?.lo
     document.fonts.load('700 12px "M PLUS Rounded 1c"', FONT_SAMPLE_JA),
     document.fonts.load('800 32px "Barlow"', FONT_SAMPLE_DIGITS),
     document.fonts.load('700 20px "Barlow"', FONT_SAMPLE_DIGITS),
+    document.fonts.load('800 40px "Noto Sans JP"', FONT_SAMPLE_JA),
+    document.fonts.load('700 20px "Noto Sans JP"', FONT_SAMPLE_JA),
   ]).catch(() => {})
   : Promise.resolve();
 let appFontsReady = false;
@@ -132,7 +140,16 @@ window.addEventListener('focus', () => {
     handlePendingFileSelection();
   }, 500);
 });
-$('#generate').addEventListener('click', generateImage);
+$('#generate').addEventListener('click', async () => {
+  state.previewScrollArmed = true;
+  showLoadingStatus();
+  await nextPaint();
+  try {
+    await generateImage();
+  } finally {
+    hideLoadingStatus();
+  }
+});
 $('#download').addEventListener('click', savePng);
 canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
@@ -174,7 +191,7 @@ function syncMode() {
   syncPowerGraphHeightSliderDefault();
   syncGraphLineWidthSliderDefault();
   drawPlaceholder();
-  setStatus('FITファイルを選択してください。');
+  setStatus(state.metrics ? 'モードを切り替えました。「画像を作成」で生成できます。' : 'FITファイルを選択してください。');
 }
 
 function syncModeLayoutState() {
@@ -257,11 +274,12 @@ async function processSelectedFile(file) {
 
   if (!isSupportedActivityFile(file)) {
     finishFileSelection(selectionToken);
-    setStatus('FITファイルを選択してください。', true);
+    setStatus('対応していないファイルです。FITファイルを選んでください。', true);
     return;
   }
 
-  setStatus('FITファイルを読み込み中…');
+  showLoadingStatus();
+  await nextPaint();
   try {
     const sourceData = await parseActivityFile(file);
     const metrics = extractMetrics(sourceData);
@@ -288,6 +306,7 @@ async function processSelectedFile(file) {
     resetSelectedFileState(false);
     setStatus(`FITファイルを読み込めませんでした: ${formatError(error)}`, true);
   } finally {
+    hideLoadingStatus();
     finishFileSelection(selectionToken);
   }
 }
@@ -296,6 +315,7 @@ function beginFileSelection(file) {
   const selectionToken = state.fileSelectionToken + 1;
   state.fileSelectionToken = selectionToken;
   state.isLoadingFile = true;
+  state.previewScrollArmed = true;
   resetSelectedFileState();
   $('#fileName').textContent = file.name;
   clearGeneratedDownload();
@@ -1002,6 +1022,21 @@ async function generateImage() {
     ? '画像を作成しました。「画像を保存」から端末に保存できます。'
     : '画像を作成しました。画像を保存できます。';
   setStatus(saveMessage);
+  maybeScrollToPreview();
+}
+
+// After a fresh generation (new file loaded or the generate button was
+// pressed), bring the preview into view on small screens — but only when
+// it is mostly off-screen, and only once per arming, so editing fields or
+// sliders afterwards never yanks the page away from the user.
+function maybeScrollToPreview() {
+  if (!state.previewScrollArmed) return;
+  state.previewScrollArmed = false;
+  const panel = document.querySelector('.preview-panel');
+  if (!panel) return;
+  if (panel.getBoundingClientRect().top > window.innerHeight * 0.6) {
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 
@@ -1068,8 +1103,33 @@ function isSmartphoneDevice() {
 }
 
 function setStatus(message, isError = false) {
-  $('#status').textContent = message;
-  $('#status').classList.toggle('error', isError);
+  const status = $('#status');
+  status.textContent = message;
+  status.classList.toggle('error', isError);
+  status.classList.remove('loading');
+}
+
+// Heavy flows (file load, the generate button) show a spinner on the
+// status line; any later setStatus() supersedes and clears it. Lightweight
+// live-regenerations from input edits never call this, so they don't
+// flicker.
+function showLoadingStatus() {
+  const status = $('#status');
+  status.textContent = '読み込み中…';
+  status.classList.remove('error');
+  status.classList.add('loading');
+}
+
+function hideLoadingStatus() {
+  $('#status').classList.remove('loading');
+}
+
+// Let the browser paint once (spinner included) before a synchronous
+// parse/draw block would otherwise freeze the frame it was requested in.
+function nextPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => setTimeout(resolve, 0));
+  });
 }
 
 function calculateWattsPerKg(power, weight) {
@@ -1285,7 +1345,7 @@ function drawPlaceholder() {
   ctx.fillStyle = 'rgba(255,255,255,.92)';
   ctx.font = '800 72px system-ui, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('FITファイルを選択して画像を作成', w / 2, h / 2);
+  ctx.fillText(state.metrics ? '「画像を作成」でプレビューを表示' : 'FITファイルを選択して画像を作成', w / 2, h / 2);
 }
 
 function drawFinishCrown(cx, cy) {
@@ -1313,30 +1373,33 @@ function drawFinishResult(metrics, weight) {
   canvas.width = FINISH_LOGICAL_WIDTH * EXPORT_SCALE;
   canvas.height = FINISH_LOGICAL_HEIGHT * EXPORT_SCALE;
   ctx.setTransform(EXPORT_SCALE, 0, 0, EXPORT_SCALE, 0, 0);
-  roundRect(ctx, 0, 0, FINISH_LOGICAL_WIDTH, FINISH_LOGICAL_HEIGHT, 0, '#075f9f');
+  // Official Zwift finish panel: bright blue, everything centered, white
+  // text. The crown stays our own vector drawing; no ride title, credit
+  // or SP is drawn here (SP lives in the report header only).
+  roundRect(ctx, 0, 0, FINISH_LOGICAL_WIDTH, FINISH_LOGICAL_HEIGHT, 0, '#0066aa');
   ctx.textAlign = 'center';
   ctx.fillStyle = '#fff';
-  drawFinishCrown(235, 66);
-  ctx.font = reportFont(38, 800);
-  ctx.fillText('完走タイム', 235, 142);
-  ctx.font = reportFont(86, 800, REPORT_NUMBER_FONT);
-  ctx.fillText(formatDuration(metrics.timerSeconds), 235, 260);
-  ctx.font = reportFont(20, 700);
-  ctx.fillText('パワー', 235, 330);
+  drawFinishCrown(235, 70);
+  ctx.font = reportFont(40, 800, FINISH_FONT);
+  ctx.fillText('完走タイム', 235, 150);
+  ctx.font = reportFont(88, 800, REPORT_NUMBER_FONT);
+  ctx.fillText(formatDuration(metrics.timerSeconds), 235, 268);
+  ctx.font = reportFont(20, 700, FINISH_FONT);
+  ctx.fillText('パワー', 235, 338);
 
-  const labels = [['20 分', 1200], ['5 分', 300], ['1 分', 60], ['15 秒', 15]];
+  const labels = [['20分', 1200], ['5分', 300], ['1分', 60], ['15秒', 15]];
   labels.forEach(([label, seconds], index) => {
-    const x = 95 + index * 90;
-    ctx.font = reportFont(36, 700, REPORT_NUMBER_FONT);
-    ctx.fillText(calculateWattsPerKg(metrics.bestPower[seconds], weight).toFixed(1), x, 384);
-    ctx.font = reportFont(15, 700);
-    ctx.fillText(label, x, 420);
+    const x = 235 + (index - 1.5) * 95;
+    ctx.font = reportFont(38, 700, REPORT_NUMBER_FONT);
+    ctx.fillText(calculateWattsPerKg(metrics.bestPower[seconds], weight).toFixed(1), x, 394);
+    ctx.font = reportFont(15, 700, FINISH_FONT);
+    ctx.fillText(label, x, 430);
   });
 
   roundRect(ctx, 52, 506, 366, 73, 8, '#f5f5f5');
   roundRect(ctx, 60, 514, 350, 58, 4, '#ff5b1a');
 
-  ctx.font = reportFont(30, 800);
+  ctx.font = reportFont(30, 800, FINISH_FONT);
   ctx.fillStyle = '#fff';
   ctx.fillText('閉じる', 235, 553);
 }

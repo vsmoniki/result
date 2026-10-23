@@ -452,10 +452,30 @@ button:disabled {
 
 .status.error { color: #ff9a8a; }
 
+/* Spinner shown on the status line while a file load / generation is in
+   flight; the ring is pure CSS so it keeps animating between JS tasks. */
+.status.loading::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  border: 2px solid rgba(159, 208, 255, .35);
+  border-top-color: #9fd0ff;
+  border-radius: 50%;
+  vertical-align: -2px;
+  animation: status-spin .7s linear infinite;
+}
+
+@keyframes status-spin {
+  to { transform: rotate(360deg); }
+}
+
 .hidden { display: none !important; }
 
 .preview-panel {
   padding: 18px;
+  scroll-margin-top: 12px;
 }
 
 .preview-toolbar {
