@@ -1098,6 +1098,19 @@ function extractMetrics(data, sourceLabel = 'FIT') {
     if (!Number.isFinite(record.elapsed)) record.elapsed = Math.max(0, (record.timestamp.getTime() - firstTime) / 1000);
   });
 
+  // Attach to each record the time it represents (seconds until the next
+  // record's timestamp; the last record reuses the previous dt). Smart
+  // recording produces irregular intervals, so downstream averages weight
+  // samples by dt instead of counting records. dt is clamped to [0, 30] so
+  // pauses cannot dominate; unusable timestamps fall back to dt = 1, which
+  // reproduces the old record-count behavior exactly.
+  records.forEach((record, index) => {
+    const next = records[index + 1];
+    let dt = next ? (next.timestamp.getTime() - record.timestamp.getTime()) / 1000 : NaN;
+    if (!Number.isFinite(dt)) dt = index > 0 ? records[index - 1].dt : 1;
+    record.dt = Math.min(30, Math.max(0, dt));
+  });
+
   const powers = records.map((r) => r.power).filter(Number.isFinite);
   const heartRates = records.map((r) => r.heartRate).filter(Number.isFinite);
   const maxElapsed = Math.max(...records.map((r) => r.elapsed));
@@ -1111,10 +1124,10 @@ function extractMetrics(data, sourceLabel = 'FIT') {
   // and is the device's official total — prefer it when present.
   const sessionDistance = data.sessions?.[0]?.total_distance;
   const distanceKm = (Number.isFinite(sessionDistance) && sessionDistance > 0) ? sessionDistance : lastDistance;
-  const avgPower = average(powers);
+  const avgPower = timeWeightedAverage(records, 'power');
   const maxPower = powers.length ? Math.max(...powers) : 0;
   const maxHeartRate = heartRates.length ? Math.max(...heartRates) : 0;
-  const avgHeartRate = heartRates.length ? average(heartRates) : 0;
+  const avgHeartRate = heartRates.length ? timeWeightedAverage(records, 'heartRate') : 0;
   const calories = data.sessions?.[0]?.total_calories ?? Math.round(avgPower * duration / 1000 * 0.96);
   const sessionTimerTime = data.sessions?.[0]?.total_timer_time;
   const timerSeconds = (Number.isFinite(sessionTimerTime) && sessionTimerTime > 0)
@@ -1145,29 +1158,46 @@ function clean(value) {
 }
 
 function bestRollingAverage(records, seconds, field = 'power') {
+  // Time-based sliding window: same elapsed extent and 90%-span acceptance
+  // as the old record-count version, but each sample is weighted by its dt
+  // (the time it represents), so smart-recording files with irregular
+  // intervals produce true time averages. With dt = 1 throughout (regular
+  // 1-second recordings) every sum below reduces to the old record-count
+  // arithmetic exactly.
   let best = 0;
-  let sum = 0;
-  let validCount = 0;
+  let weightedSum = 0;
+  let validDt = 0;
+  let totalDt = 0;
   let left = 0;
+  const dtOf = (record) => (Number.isFinite(record.dt) ? record.dt : 1);
   for (let right = 0; right < records.length; right += 1) {
-    const rightValue = records[right][field];
+    const rightRecord = records[right];
+    const rightDt = dtOf(rightRecord);
+    totalDt += rightDt;
+    const rightValue = rightRecord[field];
     if (Number.isFinite(rightValue)) {
-      sum += rightValue;
-      validCount += 1;
+      weightedSum += rightValue * rightDt;
+      validDt += rightDt;
     }
     while (records[right].elapsed - records[left].elapsed > seconds) {
-      const leftValue = records[left][field];
+      const leftRecord = records[left];
+      const leftDt = dtOf(leftRecord);
+      totalDt -= leftDt;
+      const leftValue = leftRecord[field];
       if (Number.isFinite(leftValue)) {
-        sum -= leftValue;
-        validCount -= 1;
+        weightedSum -= leftValue * leftDt;
+        validDt -= leftDt;
       }
       left += 1;
     }
-    const span = Math.max(1, records[right].elapsed - records[left].elapsed + 1);
-    if (span >= seconds * 0.9 && validCount) best = Math.max(best, sum / validCount);
+    // Covered time span of the window (sum of dt over its records) must
+    // reach 90% of the target duration, as the old span check required.
+    if (totalDt >= seconds * 0.9 && validDt > 0) {
+      best = Math.max(best, weightedSum / validDt);
+    }
   }
   if (best === 0) {
-    return average(records.map((record) => record[field]));
+    return timeWeightedAverage(records, field);
   }
   return best;
 }
@@ -1216,6 +1246,24 @@ function rollingHeartRate(records, windowSeconds = 3) {
 function average(values) {
   const valid = values.filter(Number.isFinite);
   return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : 0;
+}
+
+// Mean of a record field weighted by each record's dt (the time the sample
+// represents). Samples with a non-finite value are skipped together with
+// their dt. With dt = 1 everywhere this is exactly average() over the same
+// samples. Falls back to the plain average if no positive dt is available.
+function timeWeightedAverage(records, field) {
+  let weightedSum = 0;
+  let totalDt = 0;
+  records.forEach((record) => {
+    const value = record[field];
+    if (!Number.isFinite(value)) return;
+    const dt = Number.isFinite(record.dt) ? record.dt : 1;
+    weightedSum += value * dt;
+    totalDt += dt;
+  });
+  if (totalDt > 0) return weightedSum / totalDt;
+  return average(records.map((record) => record[field]));
 }
 
 function reportFont(size, weight = 800, family = REPORT_FONT) {
@@ -1839,9 +1887,19 @@ function clampAvgMarker(rawX, panelX, panelWidth) {
 }
 
 function drawPowerHistogram(metrics, x, y, width, height, axisY, panelBottomY, panelX = x, panelWidth = width) {
-  const powerValues = metrics.records.map((r) => r.power).filter((value) => Number.isFinite(value) && value >= 100);
+  // Official Zwift plots the full range starting at 0W: samples below
+  // 100W appear as bars at the left of the panel and only the axis labels
+  // start at 100, inset from the left edge. Bin counts are dt-weighted
+  // (seconds represented), like the other metrics.
+  const powerValues = [];
+  const powerWeights = [];
+  metrics.records.forEach((record) => {
+    if (!Number.isFinite(record.power)) return;
+    powerValues.push(record.power);
+    powerWeights.push(Number.isFinite(record.dt) ? record.dt : 1);
+  });
   const maxPowerAxis = getPowerHistogramMax(powerValues);
-  const bins = makeHistogram(powerValues, 100, maxPowerAxis, 36);
+  const bins = makeHistogram(powerValues, 0, maxPowerAxis, 36, powerWeights);
   const maxBin = Math.max(...bins, 1);
   const baselineY = panelBottomY;
   ctx.fillStyle = '#fff';
@@ -1850,8 +1908,11 @@ function drawPowerHistogram(metrics, x, y, width, height, axisY, panelBottomY, p
     const barH = count ? Math.max(5, (count / maxBin) * (baselineY - y - 24)) : 0;
     roundedTopRect(ctx, x + i * (width / bins.length), baselineY - barH, barW, barH, 10, '#fff');
   });
-  drawAxisLabels(x, axisY, width, makeLinearLabels(100, maxPowerAxis, 11));
-  const rawAvgX = x + ((metrics.avgPower - 100) / Math.max(1, maxPowerAxis - 100)) * width;
+  drawAxisLabelsAt(axisY, makePowerAxisLabels(maxPowerAxis).map((value) => ({
+    label: formatInt(value),
+    x: x + (value / Math.max(1, maxPowerAxis)) * width,
+  })));
+  const rawAvgX = x + (metrics.avgPower / Math.max(1, maxPowerAxis)) * width;
   const { lineX: avgX, badgeX: avgBadgeX } = clampAvgMarker(rawAvgX, panelX, panelWidth);
   ctx.strokeStyle = '#8c8f93';
   ctx.lineWidth = 3;
@@ -1861,6 +1922,19 @@ function drawPowerHistogram(metrics, x, y, width, height, axisY, panelBottomY, p
   ctx.stroke();
   badge(`AVG
 ${formatInt(metrics.avgPower)}`, avgBadgeX, y + 18);
+}
+
+// Axis label values for the power distribution: 100, 150, 200, ... up to
+// the axis maximum, positioned by the 0-based scale when drawn. The step
+// widens on very large axes so labels stay readable; the axis maximum is
+// always included.
+function makePowerAxisLabels(maxPowerAxis) {
+  let step = 50;
+  while (maxPowerAxis / step > 12) step *= 2;
+  const values = [];
+  for (let value = 100; value < maxPowerAxis; value += step) values.push(value);
+  if (values[values.length - 1] !== maxPowerAxis) values.push(maxPowerAxis);
+  return values;
 }
 
 function getPowerHistogramMax(values) {
@@ -1879,42 +1953,20 @@ function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height, axis
     0.9 * maxHrSetting,
     maxHrSetting,
   ];
-  const linearHrToX = (value) => x + ((value - displayMinHr) / Math.max(1, maxHrSetting - displayMinHr)) * width;
   const colors = ['#338cf0', '#58b957', '#ffd342', '#ff6538', '#ff2f1d'];
-  const zoneStartX = Math.max(x, linearHrToX(zoneThresholds[0]));
-  const zoneWidthUnit = (x + width - zoneStartX) / 5;
-  const zoneWidths = [1.5, 1, 1, 1, 0.5].map((ratio) => ratio * zoneWidthUnit);
+  // Fully linear value-to-x mapping over the displayed range, matching
+  // official Zwift: a heart-rate value always sits at
+  // x + (value - min) / (max - min) * width, so axis labels, zone bands,
+  // bars and the AVG marker all agree with the numbers. (The previous
+  // zone-based warping moved values away from their labeled positions.)
   const hrToX = (value) => {
     const clampedValue = Math.max(displayMinHr, Math.min(maxHrSetting, value));
-    if (clampedValue <= zoneThresholds[0]) {
-      return x + ((clampedValue - displayMinHr) / Math.max(1, zoneThresholds[0] - displayMinHr)) * (zoneStartX - x);
-    }
-    const zoneIndex = Math.min(
-      zoneWidths.length - 1,
-      Math.max(0, zoneThresholds.findIndex((threshold, index) => index > 0 && clampedValue <= threshold) - 1),
-    );
-    const zoneMin = zoneThresholds[zoneIndex];
-    const zoneMax = zoneThresholds[zoneIndex + 1];
-    const zoneX = zoneStartX + zoneWidths.slice(0, zoneIndex).reduce((sum, zoneWidth) => sum + zoneWidth, 0);
-    return zoneX + ((clampedValue - zoneMin) / Math.max(1, zoneMax - zoneMin)) * zoneWidths[zoneIndex];
-  };
-  const xToHr = (position) => {
-    if (position <= zoneStartX) {
-      return displayMinHr + ((position - x) / Math.max(1, zoneStartX - x)) * (zoneThresholds[0] - displayMinHr);
-    }
-    let zoneX = zoneStartX;
-    for (let i = 0; i < zoneWidths.length; i += 1) {
-      const nextZoneX = i === zoneWidths.length - 1 ? x + width : zoneX + zoneWidths[i];
-      if (position <= nextZoneX || i === zoneWidths.length - 1) {
-        return zoneThresholds[i] + ((position - zoneX) / Math.max(1, nextZoneX - zoneX)) * (zoneThresholds[i + 1] - zoneThresholds[i]);
-      }
-      zoneX = nextZoneX;
-    }
-    return maxHrSetting;
+    return x + ((clampedValue - displayMinHr) / Math.max(1, maxHrSetting - displayMinHr)) * width;
   };
   const axisLabels = Array.from({ length: 11 }, (_, index) => {
     const labelX = x + (index / 10) * width;
-    return { label: formatInt(xToHr(labelX)), x: labelX };
+    const labelValue = displayMinHr + ((maxHrSetting - displayMinHr) * index) / 10;
+    return { label: formatInt(labelValue), x: labelX };
   });
   // Clip the zone backgrounds to the panel's rounded corners (panel is
   // drawn in drawDistributionPanels at (x, panelBottomY - 158, width, 158)
@@ -1923,11 +1975,12 @@ function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height, axis
   ctx.beginPath();
   ctx.roundRect(x, panelBottomY - 158, width, 158, 9);
   ctx.clip();
-  let zoneX = zoneStartX;
   colors.forEach((color, i) => {
-    const start = zoneX;
-    const end = i === colors.length - 1 ? x + width : Math.min(x + width, start + zoneWidths[i]);
-    zoneX = end;
+    // Zone band edges are the zone boundary heart rates (fractions of max
+    // HR, as before) mapped through the same linear scale; bands extending
+    // past the panel are cut off by the clip above.
+    const start = hrToX(zoneThresholds[i]);
+    const end = i === colors.length - 1 ? x + width : Math.min(x + width, hrToX(zoneThresholds[i + 1]));
     if (end <= start) return;
     ctx.fillStyle = color;
     ctx.fillRect(start, y, end - start, panelBottomY - y);
@@ -1939,8 +1992,14 @@ function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height, axis
     ctx.globalAlpha = 1;
   });
   ctx.restore();
-  const values = metrics.records.map((r) => r.heartRate).filter(Number.isFinite);
-  const bins = makeMappedHistogram(values, 30, (value) => hrToX(value), x, width);
+  const hrValues = [];
+  const hrWeights = [];
+  metrics.records.forEach((record) => {
+    if (!Number.isFinite(record.heartRate)) return;
+    hrValues.push(record.heartRate);
+    hrWeights.push(Number.isFinite(record.dt) ? record.dt : 1);
+  });
+  const bins = makeMappedHistogram(hrValues, 30, (value) => hrToX(value), x, width, hrWeights);
   const maxBin = Math.max(...bins, 1);
   const baselineY = panelBottomY;
   ctx.fillStyle = '#fff';
@@ -1962,39 +2021,25 @@ function drawHeartHistogram(metrics, { maxHrSetting }, x, y, width, height, axis
 ${formatInt(metrics.avgHeartRate)}`, avgBadgeX, y + 28);
 }
 
-function makeLinearLabels(min, max, count) {
-  return Array.from({ length: count }, (_, index) => {
-    const value = min + ((max - min) * index) / Math.max(1, count - 1);
-    return formatInt(value);
-  });
-}
-
-function makeHistogram(values, min, max, bins) {
+function makeHistogram(values, min, max, bins, weights) {
   const hist = Array.from({ length: bins }, () => 0);
-  values.forEach((value) => {
+  values.forEach((value, i) => {
     if (!Number.isFinite(value)) return;
     const index = Math.max(0, Math.min(bins - 1, Math.floor(((value - min) / Math.max(1, max - min)) * bins)));
-    hist[index] += 1;
+    hist[index] += weights ? weights[i] : 1;
   });
   return hist;
 }
 
-function makeMappedHistogram(values, bins, mapValueToX, x, width) {
+function makeMappedHistogram(values, bins, mapValueToX, x, width, weights) {
   const hist = Array.from({ length: bins }, () => 0);
-  values.forEach((value) => {
+  values.forEach((value, i) => {
     if (!Number.isFinite(value)) return;
     const mappedX = mapValueToX(value);
     const index = Math.max(0, Math.min(bins - 1, Math.floor(((mappedX - x) / Math.max(1, width)) * bins)));
-    hist[index] += 1;
+    hist[index] += weights ? weights[i] : 1;
   });
   return hist;
-}
-
-function drawAxisLabels(x, y, width, labels) {
-  ctx.fillStyle = '#1c1c1c';
-  ctx.font = reportFont(11, 800, REPORT_NUMBER_FONT);
-  ctx.textAlign = 'center';
-  labels.forEach((label, i) => ctx.fillText(label, x + (i / (labels.length - 1)) * width, y));
 }
 
 function drawAxisLabelsAt(y, labels) {
