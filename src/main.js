@@ -1406,15 +1406,15 @@ function drawFinishResult(metrics, weight) {
   ctx.font = reportFont(40, 700, FINISH_FONT);
   ctx.fillText('完走タイム', cx, H * 0.24);
 
-  // Fit the clock to ~86% of the panel width whatever its length, so a
-  // short "25:58" and a long "18:56:13" both span the panel like the
-  // official time does.
+  // The clock keeps the official panel's fixed proportions (~88px at this
+  // width, like the official "25:58"); it only shrinks when a very long
+  // time string would overflow the panel — it never scales up.
   const timeText = formatDuration(metrics.timerSeconds);
   let timeSize = 88;
   ctx.font = reportFont(timeSize, 700, REPORT_NUMBER_FONT);
   const measuredTimeWidth = ctx.measureText(timeText).width;
-  if (measuredTimeWidth > 0) {
-    timeSize = Math.round(Math.max(60, Math.min(150, (timeSize * (W * 0.86)) / measuredTimeWidth)));
+  if (measuredTimeWidth > W * 0.88) {
+    timeSize = Math.round(Math.max(56, (timeSize * (W * 0.88)) / measuredTimeWidth));
     ctx.font = reportFont(timeSize, 700, REPORT_NUMBER_FONT);
   }
   ctx.save();
