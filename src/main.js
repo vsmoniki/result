@@ -1,6 +1,7 @@
 import FitParser from 'fit-file-parser';
 import '@fontsource/m-plus-rounded-1c/700.css';
 import '@fontsource/m-plus-rounded-1c/800.css';
+import '@fontsource/barlow/600.css';
 import '@fontsource/barlow/700.css';
 import '@fontsource/barlow/800.css';
 import '@fontsource/noto-sans-jp/700.css';
@@ -78,6 +79,7 @@ const fontsReadyPromise = (typeof document !== 'undefined' && document.fonts?.lo
   ? Promise.all([
     document.fonts.load('800 27px "M PLUS Rounded 1c"', FONT_SAMPLE_JA),
     document.fonts.load('700 12px "M PLUS Rounded 1c"', FONT_SAMPLE_JA),
+    document.fonts.load('600 38px "Barlow"', FONT_SAMPLE_DIGITS),
     document.fonts.load('800 32px "Barlow"', FONT_SAMPLE_DIGITS),
     document.fonts.load('700 20px "Barlow"', FONT_SAMPLE_DIGITS),
     document.fonts.load('800 40px "Noto Sans JP"', FONT_SAMPLE_JA),
@@ -1373,35 +1375,80 @@ function drawFinishResult(metrics, weight) {
   canvas.width = FINISH_LOGICAL_WIDTH * EXPORT_SCALE;
   canvas.height = FINISH_LOGICAL_HEIGHT * EXPORT_SCALE;
   ctx.setTransform(EXPORT_SCALE, 0, 0, EXPORT_SCALE, 0, 0);
-  // Official Zwift finish panel: bright blue, everything centered, white
-  // text. The crown stays our own vector drawing; no ride title, credit
-  // or SP is drawn here (SP lives in the report header only).
-  roundRect(ctx, 0, 0, FINISH_LOGICAL_WIDTH, FINISH_LOGICAL_HEIGHT, 0, '#0066aa');
+  const W = FINISH_LOGICAL_WIDTH;
+  const H = FINISH_LOGICAL_HEIGHT;
+  const cx = W / 2;
+  // Official Zwift finish panel: a bright-blue rounded panel floating over
+  // the scene, everything centered, white text, content distributed over
+  // the full panel height (fractions of H below mirror the official
+  // layout). The crown stays our own vector drawing; no ride title,
+  // credit or SP is drawn here (SP lives in the report header only).
+  // The PNG keeps transparent corners outside the rounded panel.
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(0, 0, W, H, 18);
+  ctx.clip();
+  ctx.fillStyle = '#0066aa';
+  ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#fff';
-  drawFinishCrown(235, 70);
-  ctx.font = reportFont(40, 800, FINISH_FONT);
-  ctx.fillText('完走タイム', 235, 150);
-  ctx.font = reportFont(88, 800, REPORT_NUMBER_FONT);
-  ctx.fillText(formatDuration(metrics.timerSeconds), 235, 268);
+
+  // Crown graphic unchanged, scaled to ~54px wide, center ≈ 0.13H.
+  const crownCy = 73;
+  ctx.save();
+  ctx.translate(cx, crownCy);
+  ctx.scale(54 / 44, 54 / 44);
+  ctx.translate(-cx, -crownCy);
+  drawFinishCrown(cx, crownCy);
+  ctx.restore();
+
+  ctx.font = reportFont(40, 700, FINISH_FONT);
+  ctx.fillText('完走タイム', cx, H * 0.24);
+
+  // Fit the clock to ~86% of the panel width whatever its length, so a
+  // short "25:58" and a long "18:56:13" both span the panel like the
+  // official time does.
+  const timeText = formatDuration(metrics.timerSeconds);
+  let timeSize = 88;
+  ctx.font = reportFont(timeSize, 700, REPORT_NUMBER_FONT);
+  const measuredTimeWidth = ctx.measureText(timeText).width;
+  if (measuredTimeWidth > 0) {
+    timeSize = Math.round(Math.max(60, Math.min(150, (timeSize * (W * 0.86)) / measuredTimeWidth)));
+    ctx.font = reportFont(timeSize, 700, REPORT_NUMBER_FONT);
+  }
+  ctx.save();
+  ctx.textBaseline = 'middle';
+  ctx.fillText(timeText, cx, H * 0.4);
+  ctx.restore();
+
   ctx.font = reportFont(20, 700, FINISH_FONT);
-  ctx.fillText('パワー', 235, 338);
+  ctx.fillText('パワー', cx, H * 0.56);
 
   const labels = [['20分', 1200], ['5分', 300], ['1分', 60], ['15秒', 15]];
   labels.forEach(([label, seconds], index) => {
-    const x = 235 + (index - 1.5) * 95;
-    ctx.font = reportFont(38, 700, REPORT_NUMBER_FONT);
-    ctx.fillText(calculateWattsPerKg(metrics.bestPower[seconds], weight).toFixed(1), x, 394);
+    const x = cx + (index - 1.5) * 95;
+    ctx.font = reportFont(38, 600, REPORT_NUMBER_FONT);
+    ctx.fillText(calculateWattsPerKg(metrics.bestPower[seconds], weight).toFixed(1), x, H * 0.65);
     ctx.font = reportFont(15, 700, FINISH_FONT);
-    ctx.fillText(label, x, 430);
+    ctx.fillText(label, x, H * 0.71);
   });
 
-  roundRect(ctx, 52, 506, 366, 73, 8, '#f5f5f5');
-  roundRect(ctx, 60, 514, 350, 58, 4, '#ff5b1a');
+  const buttonWidth = W * 0.76;
+  const buttonX = (W - buttonWidth) / 2;
+  const buttonY = H * 0.79;
+  const buttonHeight = H * 0.095;
+  roundRect(ctx, buttonX, buttonY, buttonWidth, buttonHeight, 8, '#f5f5f5');
+  roundRect(ctx, buttonX + 7, buttonY + 7, buttonWidth - 14, buttonHeight - 14, 4, '#ff5b1a');
 
-  ctx.font = reportFont(30, 800, FINISH_FONT);
+  ctx.font = reportFont(28, 700, FINISH_FONT);
   ctx.fillStyle = '#fff';
-  ctx.fillText('閉じる', 235, 553);
+  ctx.save();
+  ctx.textBaseline = 'middle';
+  ctx.fillText('閉じる', cx, buttonY + buttonHeight / 2);
+  ctx.restore();
+
+  ctx.restore();
 }
 
 function drawRideReport(metrics, options) {
