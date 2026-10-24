@@ -2,8 +2,10 @@ import FitParser from 'fit-file-parser';
 import '@fontsource/m-plus-rounded-1c/700.css';
 import '@fontsource/m-plus-rounded-1c/800.css';
 import '@fontsource/barlow/600.css';
+import '@fontsource/barlow/500.css';
 import '@fontsource/barlow/700.css';
 import '@fontsource/barlow/800.css';
+import '@fontsource/noto-sans-jp/500.css';
 import '@fontsource/noto-sans-jp/700.css';
 import '@fontsource/noto-sans-jp/800.css';
 import { calculateNormalizedPower, calculateStressPoints } from './sp.js';
@@ -84,6 +86,8 @@ const fontsReadyPromise = (typeof document !== 'undefined' && document.fonts?.lo
     document.fonts.load('700 20px "Barlow"', FONT_SAMPLE_DIGITS),
     document.fonts.load('800 40px "Noto Sans JP"', FONT_SAMPLE_JA),
     document.fonts.load('700 20px "Noto Sans JP"', FONT_SAMPLE_JA),
+    document.fonts.load('500 34px "Barlow"', FONT_SAMPLE_DIGITS),
+    document.fonts.load('500 17px "Noto Sans JP"', FONT_SAMPLE_JA),
   ]).catch(() => {})
   : Promise.resolve();
 let appFontsReady = false;
@@ -1395,7 +1399,7 @@ function drawFinishResult(metrics, weight) {
   ctx.fillStyle = '#fff';
 
   // Crown graphic unchanged, scaled to ~54px wide, center ≈ 0.13H.
-  const crownCy = 73;
+  const crownCy = 50;
   ctx.save();
   ctx.translate(cx, crownCy);
   ctx.scale(54 / 44, 54 / 44);
@@ -1422,15 +1426,15 @@ function drawFinishResult(metrics, weight) {
   ctx.fillText(timeText, cx, H * 0.4);
   ctx.restore();
 
-  ctx.font = reportFont(20, 700, FINISH_FONT);
+  ctx.font = reportFont(17, 500, FINISH_FONT);
   ctx.fillText('パワー', cx, H * 0.56);
 
   const labels = [['20分', 1200], ['5分', 300], ['1分', 60], ['15秒', 15]];
   labels.forEach(([label, seconds], index) => {
     const x = cx + (index - 1.5) * 95;
-    ctx.font = reportFont(38, 600, REPORT_NUMBER_FONT);
+    ctx.font = reportFont(34, 500, REPORT_NUMBER_FONT);
     ctx.fillText(calculateWattsPerKg(metrics.bestPower[seconds], weight).toFixed(1), x, H * 0.65);
-    ctx.font = reportFont(15, 700, FINISH_FONT);
+    ctx.font = reportFont(14, 500, FINISH_FONT);
     ctx.fillText(label, x, H * 0.71);
   });
 
