@@ -10,6 +10,15 @@ import '@fontsource/noto-sans-jp/700.css';
 import '@fontsource/noto-sans-jp/800.css';
 import { calculateNormalizedPower, calculateStressPoints } from './sp.js';
 import { titleFromFileName } from './ride-title.js';
+import {
+  loadIntervalsSettings,
+  saveIntervalsSettings,
+  clearIntervalsSettings,
+  testIntervalsConnection,
+  fetchIntervalsActivities,
+  fetchIntervalsActivityStreams,
+  streamsToFitData,
+} from './intervals.js';
 import { getHeartLineRange } from './heart-line-range.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -184,6 +193,7 @@ resetOptionsButton.addEventListener('click', resetOptionsToDefaults);
 loadSavedPerformanceSettings();
 loadSavedAvatarBubbleSettings();
 loadSavedAvatarImage();
+setupIntervalsUi();
 
 function syncMode() {
   const mode = getMode();
@@ -348,6 +358,193 @@ function resetSelectedFileState(resetFileName = true) {
   state.metrics = null;
   fileDrop.classList.remove('has-file');
   if (resetFileName) $('#fileName').textContent = '未選択';
+}
+
+// ---- Intervals.icu ----
+// FIT ファイルの代替の読み込み元。APIキーは intervals.js がブラウザ内に
+// だけ保存し、通信も intervals.icu へ直接行う（このサイトにサーバーはない）。
+
+function setIntervalsStatus(message) {
+  $('#intervalsStatus').textContent = message || '';
+}
+
+function setIntervalsSettingsStatus(message) {
+  $('#intervalsSettingsStatus').textContent = message || '';
+}
+
+function readIntervalsSettingsForm() {
+  return {
+    apiKey: $('#intervalsApiKey').value.trim(),
+    athleteId: $('#intervalsAthleteId').value.trim(),
+    remember: $('#intervalsRemember').checked,
+  };
+}
+
+function fillIntervalsSettingsForm(settings) {
+  $('#intervalsApiKey').value = settings.apiKey || '';
+  $('#intervalsAthleteId').value = settings.athleteId || '';
+  $('#intervalsRemember').checked = Boolean(settings.remember);
+}
+
+function openIntervalsSettings(message = '') {
+  fillIntervalsSettingsForm(loadIntervalsSettings());
+  setIntervalsSettingsStatus(message);
+  $('#intervalsSettingsDialog').showModal();
+}
+
+function setupIntervalsUi() {
+  const dialog = $('#intervalsSettingsDialog');
+  $('#intervalsSettingsOpen').addEventListener('click', () => openIntervalsSettings());
+  $('#intervalsSettingsCancel').addEventListener('click', () => dialog.close());
+  $('#intervalsShowKey').addEventListener('change', (event) => {
+    $('#intervalsApiKey').type = event.currentTarget.checked ? 'text' : 'password';
+  });
+  $('#intervalsSettingsSave').addEventListener('click', () => {
+    const settings = readIntervalsSettingsForm();
+    if (!settings.apiKey) {
+      setIntervalsSettingsStatus('APIキーを入力してください。');
+      return;
+    }
+    saveIntervalsSettings(settings);
+    dialog.close();
+    setIntervalsStatus('API設定を保存しました。「アクティビティを取得」を押してください。');
+  });
+  $('#intervalsClear').addEventListener('click', () => {
+    clearIntervalsSettings();
+    fillIntervalsSettingsForm(loadIntervalsSettings());
+    setIntervalsSettingsStatus('保存していたAPIキーを削除しました。');
+  });
+  $('#intervalsTest').addEventListener('click', async () => {
+    const settings = readIntervalsSettingsForm();
+    if (!settings.apiKey) {
+      setIntervalsSettingsStatus('APIキーを入力してください。');
+      return;
+    }
+    setIntervalsSettingsStatus('接続中…');
+    try {
+      await testIntervalsConnection(settings);
+      setIntervalsSettingsStatus('接続できました。この内容で保存できます。');
+    } catch (error) {
+      setIntervalsSettingsStatus(formatError(error));
+    }
+  });
+  $('#intervalsLoad').addEventListener('click', loadIntervalsActivityList);
+}
+
+function intervalsRangeDates() {
+  const days = Number($('#intervalsRange').value) || 30;
+  const newest = new Date();
+  const oldest = new Date(newest.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
+  const toDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { oldest: toDate(oldest), newest: toDate(newest) };
+}
+
+async function loadIntervalsActivityList() {
+  const settings = loadIntervalsSettings();
+  if (!settings.apiKey) {
+    openIntervalsSettings('まずAPIキーを設定してください。取得方法は下の「APIキーの取得方法」にあります。');
+    return;
+  }
+  const loadButton = $('#intervalsLoad');
+  loadButton.disabled = true;
+  setIntervalsStatus('アクティビティを取得中…');
+  try {
+    const activities = await fetchIntervalsActivities(settings, intervalsRangeDates());
+    renderIntervalsList(activities);
+  } catch (error) {
+    $('#intervalsList').hidden = true;
+    setIntervalsStatus(formatError(error));
+  } finally {
+    loadButton.disabled = false;
+  }
+}
+
+function renderIntervalsList(activities) {
+  const list = $('#intervalsList');
+  list.innerHTML = '';
+  if (!activities.length) {
+    list.hidden = true;
+    setIntervalsStatus('この期間にアクティビティがありませんでした。');
+    return;
+  }
+  activities.forEach((activity) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'intervals-item';
+    const title = document.createElement('strong');
+    title.textContent = activity.name;
+    const meta = document.createElement('span');
+    meta.textContent = formatIntervalsActivityMeta(activity);
+    button.append(title, meta);
+    button.addEventListener('click', () => processIntervalsActivity(activity));
+    list.append(button);
+  });
+  list.hidden = false;
+  setIntervalsStatus(`${activities.length}件のアクティビティが見つかりました。選ぶと読み込みます。`);
+}
+
+function formatIntervalsActivityMeta(activity) {
+  const parts = [];
+  const date = activity.startDateLocal ? new Date(activity.startDateLocal) : null;
+  if (date && Number.isFinite(date.getTime())) {
+    parts.push(`${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`);
+  }
+  if (activity.movingTimeSec != null) parts.push(formatDuration(activity.movingTimeSec));
+  if (activity.distanceKm != null) parts.push(`${activity.distanceKm.toFixed(1)}km`);
+  if (activity.elevationGainM != null) parts.push(`獲得標高 ${Math.round(activity.elevationGainM)}m`);
+  return parts.join(' ・ ');
+}
+
+function syncIntervalsRideTitle(activity) {
+  const titleInput = $('#rideTitle');
+  const currentTitle = titleInput.value.trim();
+  if (currentTitle && currentTitle !== state.autoRideTitle) return;
+
+  const title = String(activity?.name || '').trim();
+  if (!title) return;
+
+  titleInput.value = title;
+  state.autoRideTitle = title;
+}
+
+// FIT 読み込み（processSelectedFile）と同じ後処理を通し、プレビューや
+// ダウンロードが読み込み元によらず同じ挙動になるようにする。
+async function processIntervalsActivity(activity) {
+  const settings = loadIntervalsSettings();
+  const selectionToken = beginFileSelection({ name: activity.name });
+
+  showLoadingStatus();
+  await nextPaint();
+  try {
+    const streams = await fetchIntervalsActivityStreams(settings, activity.id);
+    const sourceData = streamsToFitData(activity, streams);
+    const metrics = extractMetrics(sourceData, 'Intervals.icu');
+    if (!isCurrentFileSelection(selectionToken)) return;
+
+    state.sourceData = sourceData;
+    state.metrics = metrics;
+    state.isLoadingFile = false;
+    syncIntervalsRideTitle(activity);
+    syncGraphSmoothnessSliderDefault();
+    syncPowerGraphHeightSliderDefault();
+    syncGraphLineWidthSliderDefault();
+    syncSp();
+    $('#generate').disabled = false;
+    fileDrop.classList.add('has-file');
+    if (canGenerateImage()) {
+      generateImage();
+      setStatus('プレビューへ反映しました。');
+    } else {
+      setStatus('必要項目を入力して画像を作成してください。');
+    }
+  } catch (error) {
+    if (!isCurrentFileSelection(selectionToken)) return;
+    resetSelectedFileState(false);
+    setStatus(`Intervals.icuから読み込めませんでした: ${formatError(error)}`, true);
+  } finally {
+    hideLoadingStatus();
+    finishFileSelection(selectionToken);
+  }
 }
 
 function handleRideTitleInput(event) {
