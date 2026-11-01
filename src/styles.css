@@ -1031,7 +1031,12 @@ canvas {
     width: 100%;
   }
 
-  .form-grid input {
+  /* iOS Safari は入力欄の文字が16px未満だとフォーカス時に自動で拡大する。
+     スマホ幅では全フォーム部品を16pxにして拡大を防ぐ
+     （ラベル側の .9rem を継承するダイアログ入力やセレクトも対象）。 */
+  input,
+  select,
+  textarea {
     font-size: 16px;
   }
 
