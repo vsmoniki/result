@@ -1741,7 +1741,7 @@ function drawHeader(metrics, { title, level, sp, avatarMessage, avatarBubbleColo
 }
 
 const HEADER_STATS_LEFT = 37;
-const HEADER_STATS_RIGHT = 912; // アバターの直前まで
+const HEADER_STATS_RIGHT = 885; // SPの右端。アバター手前に余白を残す（旧レイアウトのSP位置に合わせた）
 const HEADER_STATS_MIN_GAP = 20;
 
 function measureHeaderStat(stat, fontSize) {
