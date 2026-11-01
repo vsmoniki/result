@@ -486,7 +486,8 @@ function renderIntervalsList(activities) {
     button.type = 'button';
     button.className = 'intervals-item';
     const title = document.createElement('strong');
-    title.textContent = activity.name;
+    // 名前が空で返るケースに備え、表示側でも種別＋日付の見出しに落とす
+    title.textContent = activity.name || fallbackListTitle(activity);
     const meta = document.createElement('span');
     meta.textContent = formatIntervalsActivityMeta(activity);
     button.append(title, meta);
@@ -495,6 +496,15 @@ function renderIntervalsList(activities) {
   });
   list.hidden = false;
   setIntervalsStatus(`${activities.length}件のアクティビティが見つかりました。選ぶと読み込みます。`);
+}
+
+function fallbackListTitle(activity) {
+  const label = activity.type || 'アクティビティ';
+  const date = activity.startDateLocal ? new Date(activity.startDateLocal) : null;
+  if (date && Number.isFinite(date.getTime())) {
+    return `${label}（${date.getMonth() + 1}/${date.getDate()}）`;
+  }
+  return label;
 }
 
 function formatIntervalsActivityMeta(activity) {
@@ -1714,19 +1724,57 @@ function drawHeader(metrics, { title, level, sp, avatarMessage, avatarBubbleColo
   }
   ctx.fillText(displayTitle, 27, 72);
 
-  // Each stat owns the slot from its x to the next stat's x (SP runs to
-  // 912, just before the avatar); drawHeaderStat shrinks the value until
-  // icon + value + unit all fit inside the slot, gap included.
+  // 数値グループ同士の空白がバラつかないよう、まず全グループの実幅を測り、
+  // 余ったスペースをグループ間の空白として均等に配る。開始位置を固定して
+  // 左揃えにすると、時間のような長い値が次のグループにくっついて見えるため。
+  // 並び・アイコン・左揃え自体は公式の見た目に合わせている。
   const stats = [
-    { icon: 'bolt', value: formatInt(metrics.avgPower), unit: 'AVG', x: 37, slotEnd: 240 },
-    { icon: 'route', value: metrics.distanceKm.toFixed(1), unit: 'km', x: 240, slotEnd: 414 },
-    { icon: 'clock', value: formatDuration(metrics.timerSeconds), unit: '', x: 414, slotEnd: 610 },
-    { icon: null, value: formatInt(metrics.calories), unit: 'KCAL', x: 610, slotEnd: 817 },
-    { icon: null, value: formatInt(sp), unit: 'SP', x: 817, slotEnd: 912, outline: true },
+    { icon: 'bolt', value: formatInt(metrics.avgPower), unit: 'AVG' },
+    { icon: 'route', value: metrics.distanceKm.toFixed(1), unit: 'km' },
+    { icon: 'clock', value: formatDuration(metrics.timerSeconds), unit: '' },
+    { icon: null, value: formatInt(metrics.calories), unit: 'KCAL' },
+    { icon: null, value: formatInt(sp), unit: 'SP', outline: true },
   ];
   drawLevelProgress(level);
   drawAvatar(avatarMessage, avatarBubbleColor, avatarTextColor);
-  stats.forEach((stat) => drawHeaderStat(stat));
+  layoutHeaderStats(stats).forEach((stat) => drawHeaderStat(stat));
+}
+
+const HEADER_STATS_LEFT = 37;
+const HEADER_STATS_RIGHT = 912; // アバターの直前まで
+const HEADER_STATS_MIN_GAP = 20;
+
+function measureHeaderStat(stat, fontSize) {
+  const iconWidth = stat.icon ? 32 : 0;
+  ctx.font = reportFont(fontSize, 800, REPORT_NUMBER_FONT);
+  const valueWidth = ctx.measureText(String(stat.value)).width;
+  ctx.font = reportFont(12);
+  const unitWidth = stat.unit ? ctx.measureText(stat.unit).width + 5 : 0;
+  return iconWidth + valueWidth + unitWidth;
+}
+
+function layoutHeaderStats(stats) {
+  // 全グループでフォントサイズをそろえ、最低限の空白を保てるまで一律に縮める
+  let fontSize = 39;
+  let widths = stats.map((stat) => measureHeaderStat(stat, fontSize));
+  const totalWidth = () => widths.reduce((sum, width) => sum + width, 0);
+  while (
+    fontSize > 20
+    && totalWidth() + HEADER_STATS_MIN_GAP * (stats.length - 1) > HEADER_STATS_RIGHT - HEADER_STATS_LEFT
+  ) {
+    fontSize -= 1;
+    widths = stats.map((stat) => measureHeaderStat(stat, fontSize));
+  }
+  const gap = Math.max(
+    0,
+    (HEADER_STATS_RIGHT - HEADER_STATS_LEFT - totalWidth()) / (stats.length - 1),
+  );
+  let x = HEADER_STATS_LEFT;
+  return stats.map((stat, index) => {
+    const placed = { ...stat, x, fontSize };
+    x += widths[index] + gap;
+    return placed;
+  });
 }
 
 function drawReportFanToolMark() {
@@ -1740,28 +1788,15 @@ function drawReportFanToolMark() {
 }
 
 
-function drawHeaderStat({ icon, value, unit, x, slotEnd, outline = false }) {
+function drawHeaderStat({ icon, value, unit, x, fontSize, outline = false }) {
   ctx.fillStyle = '#24242a';
   ctx.textAlign = 'left';
   const valueX = icon ? x + 32 : x;
   if (icon) drawHeaderIcon(icon, x, 105);
   const text = String(value);
-  // Budget the whole stat against its slot: icon space + value + gap +
-  // unit (measured at the font the unit is actually drawn with). A wide
-  // value like 18:56:13 shrinks until the unit still ends before the next
-  // stat starts, instead of running straight into it. A stat with an empty
-  // unit (the clock) draws no unit and reserves no width for one, so the
-  // freed space counts toward the value's shrink decision.
-  const slotWidth = slotEnd - 14 - x;
-  const iconWidth = icon ? 32 : 0;
-  ctx.font = reportFont(12);
-  const unitWidth = unit ? ctx.measureText(unit).width + 5 : 0;
-  let fontSize = 39;
+  // フォントサイズと開始位置は layoutHeaderStats が空白均等化のために決める。
+  // ここでは受け取った位置・サイズで描くだけにする。
   ctx.font = reportFont(fontSize, 800, REPORT_NUMBER_FONT);
-  while (fontSize > 22 && iconWidth + ctx.measureText(text).width + unitWidth > slotWidth) {
-    fontSize -= 1;
-    ctx.font = reportFont(fontSize, 800, REPORT_NUMBER_FONT);
-  }
   if (outline) {
     ctx.save();
     ctx.lineWidth = 2;
