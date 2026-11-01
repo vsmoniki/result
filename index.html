@@ -65,7 +65,7 @@
                 <span>Intervals.icuから読み込む</span>
                 <span class="intervals-chevron" aria-hidden="true">▾</span>
               </button>
-              <button id="intervalsSettingsOpen" class="secondary-action" type="button">API設定</button>
+              <button id="intervalsSettingsOpen" class="secondary-action" type="button">設定</button>
             </div>
             <div id="intervalsBody" class="intervals-body" hidden>
               <p class="intervals-note">FITファイルがなくても、Intervals.icuに記録されたアクティビティから画像を作れます。APIキーの利用は自己責任です。Stravaから取り込んだアクティビティはAPI経由で取得できないため使えません。</p>
@@ -184,7 +184,7 @@
     </div>
     <dialog id="intervalsSettingsDialog" class="intervals-settings-dialog">
       <div class="intervals-settings-surface">
-        <h2>Intervals.icu API設定</h2>
+        <h2>Intervals.icu設定</h2>
         <p class="intervals-settings-lead">自分のIntervals.icuアカウントのAPIキーを使います。キーはこのブラウザ内にだけ保存され、Intervals.icu以外のサーバーへ送られることはありません（このサイト自体にサーバーはありません）。</p>
         <label class="intervals-field">APIキー<input id="intervalsApiKey" type="password" autocomplete="off" placeholder="APIキー" /></label>
         <label class="intervals-check"><input id="intervalsShowKey" type="checkbox" /> キーを表示する</label>
@@ -200,7 +200,7 @@
             <li>コピーしたAPIキーを上の欄に貼り付ける</li>
           </ol>
           <p>注意: APIキーの利用は自己責任です。キーはパスワードと同じなので、他人に教えたり、共有のパソコンで「この端末に保存する」をオンにしたりしないでください。キーはIntervals.icuの設定ページでいつでも再生成・削除できます（再生成すると古いキーは使えなくなります）。</p>
-          <p>また、Stravaから取り込んだアクティビティは、Stravaの規約によりIntervals.icuのAPI経由ではデータを取得できないため、この機能では使えません。Garminなどから直接Intervals.icuに取り込んだアクティビティを選んでください。</p>
+          <p>また、Stravaから取り込んだアクティビティは、Stravaの規約によりIntervals.icuのAPI経由ではデータを取得できないため、この機能では使えません。Garminなどから直接Intervals.icuに取り込んだアクティビティを選んでください。なお、Garmin由来のアクティビティは現在は使えますが、Garminの規約変更により今後API経由で取得できなくなる可能性があります（自分でFITファイルをアップロードしたアクティビティは対象外です）。</p>
         </details>
         <p id="intervalsSettingsStatus" class="intervals-status" aria-live="polite"></p>
         <div class="intervals-settings-actions">
