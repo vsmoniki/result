@@ -192,10 +192,11 @@
         <label class="intervals-check"><input id="intervalsRemember" type="checkbox" checked /> この端末に保存する（オフにするとタブを閉じた時点で消えます）</label>
         <details class="intervals-howto">
           <summary>APIキーの取得方法</summary>
+          <img class="intervals-howto-img" src="./intervals-guide.svg" alt="Intervals.icu設定ページのDeveloper Settingsのイメージ図。1がアスリートID、2がAPIキー（未発行の場合はGenerate）の場所" loading="lazy">
           <ol>
             <li>Intervals.icuにログインし、<a href="https://intervals.icu/settings" target="_blank" rel="noopener noreferrer">設定ページ</a>を開く</li>
             <li>ページの下の方にある「Developer Settings（開発者設定）」までスクロールする</li>
-            <li>そこにアスリートIDとAPIキーが並んでいる。APIキーは「(view)」で表示し、まだ無い場合は「Generate」で生成してコピーする</li>
+            <li>①アスリートIDと、②APIキーが並んでいる（上の図）。APIキーがまだ無い場合は「Generate」を押して発行し、表示されたキーをコピーする。すでに発行済みの場合は「(view)」で表示してコピーする</li>
             <li>コピーしたAPIキーを上の欄に貼り付ける</li>
           </ol>
           <p>注意: APIキーの利用は自己責任です。キーはパスワードと同じなので、他人に教えたり、共有のパソコンで「この端末に保存する」をオンにしたりしないでください。キーはIntervals.icuの設定ページでいつでも再生成・削除できます（再生成すると古いキーは使えなくなります）。</p>
