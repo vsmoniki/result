@@ -421,7 +421,7 @@ function setupIntervalsUi() {
     saveIntervalsSettings(settings);
     dialog.close();
     setIntervalsOpen(true);
-    setIntervalsStatus('API設定を保存しました。「アクティビティを取得」を押してください。');
+    setIntervalsStatus('設定を保存しました。「アクティビティを取得」を押してください。');
   });
   $('#intervalsClear').addEventListener('click', () => {
     clearIntervalsSettings();
