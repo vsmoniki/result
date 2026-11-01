@@ -502,7 +502,8 @@ function renderIntervalsList(activities) {
     list.append(button);
   });
   list.hidden = false;
-  setIntervalsStatus(`${activities.length}件のアクティビティが見つかりました。選ぶと読み込みます。`);
+  const withName = activities.filter((activity) => activity.hasName).length;
+  setIntervalsStatus(`${activities.length}件のアクティビティが見つかりました。選ぶと読み込みます。（名前データあり ${withName}/${activities.length}件）`);
 }
 
 function fallbackListTitle(activity) {
