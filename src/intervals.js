@@ -77,6 +77,7 @@ export function summarizeActivity(raw) {
   return {
     id: String(raw.id),
     name,
+    hasName: Boolean(String(raw.name ?? '').trim() || String(raw.title ?? '').trim()),
     type,
     startDateLocal,
     movingTimeSec: Number.isFinite(Number(raw.moving_time)) ? Number(raw.moving_time) : null,
