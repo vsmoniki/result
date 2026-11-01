@@ -798,6 +798,13 @@ button:disabled {
 
 .intervals-howto ol { padding-left: 1.3em; }
 
+.intervals-howto-img {
+  width: 100%;
+  height: auto;
+  margin: 8px 0 4px;
+  border-radius: 10px;
+}
+
 .intervals-howto a { color: #ffd166; }
 
 .intervals-settings-actions {

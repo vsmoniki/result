@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="308" viewBox="0 0 720 308" role="img" aria-label="Intervals.icu設定ページのDeveloper Settingsのイメージ図">
+  <rect x="4" y="4" width="712" height="300" rx="12" fill="#ffffff" stroke="#d4dbe3" stroke-width="2"/>
+  <!-- 見出し -->
+  <text x="36" y="58" font-family="sans-serif" font-size="24" font-weight="700" fill="#1c2733">&lt;/&gt; Developer Settings</text>
+  <line x1="36" y1="78" x2="684" y2="78" stroke="#e3e9ef" stroke-width="2"/>
+
+  <!-- 左列: アスリートID -->
+  <circle cx="52" cy="112" r="14" fill="#ff5b1a"/>
+  <text x="52" y="119" font-family="sans-serif" font-size="15" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+  <text x="76" y="119" font-family="sans-serif" font-size="16" fill="#5a6b7c">Athlete ID（アスリートID）</text>
+  <rect x="36" y="132" width="300" height="46" rx="8" fill="#f4f7fa" stroke="#d4dbe3"/>
+  <text x="52" y="162" font-family="monospace" font-size="19" fill="#1c2733">i123456</text>
+  <text x="36" y="202" font-family="sans-serif" font-size="13" fill="#5a6b7c">↑ この値を「アスリートID」欄に入力（任意）</text>
+
+  <!-- 右列: APIキー（未発行の状態） -->
+  <circle cx="396" cy="112" r="14" fill="#ff5b1a"/>
+  <text x="396" y="119" font-family="sans-serif" font-size="15" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+  <text x="420" y="119" font-family="sans-serif" font-size="16" fill="#5a6b7c">API Key（APIキー）</text>
+  <rect x="380" y="132" width="300" height="46" rx="8" fill="#f4f7fa" stroke="#d4dbe3"/>
+  <text x="396" y="162" font-family="sans-serif" font-size="18" font-weight="700" fill="#0b70bd">Generate</text>
+  <text x="36" y="238" font-family="sans-serif" font-size="13" fill="#5a6b7c">まだ発行していない場合は「Generate」を押してキーを発行し、表示されたキーをコピーしてください。</text>
+  <text x="36" y="262" font-family="sans-serif" font-size="13" fill="#5a6b7c">すでに発行済みの場合は「(view)」で表示してコピーできます。</text>
+
+  <text x="36" y="290" font-family="sans-serif" font-size="12" fill="#8a99a8">※ 画面のイメージ図です。値は例で、実際の個人情報は含まれていません。</text>
+</svg>
