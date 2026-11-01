@@ -704,9 +704,10 @@ button:disabled {
 }
 
 .intervals-item {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 2px;
-  justify-items: start;
   min-height: 48px;
   padding: 10px 12px;
   box-shadow: none;
@@ -720,13 +721,11 @@ button:disabled {
 
 .intervals-item strong {
   display: block;
-  width: 100%;
-  overflow: hidden;
+  max-width: 100%;
   color: #fff;
   font-size: .95rem;
   font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .intervals-item span {
