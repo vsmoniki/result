@@ -394,6 +394,12 @@ function openIntervalsSettings(message = '') {
 
 function setupIntervalsUi() {
   const dialog = $('#intervalsSettingsDialog');
+  // 動いている版を確認できるよう、ビルド時刻を小さく表示する（切り分け用）
+  // APP_VERSION の const はファイル末尾にあるため、ここでは注入値を直接見る
+  const buildStamp = $('#intervalsBuild');
+  if (buildStamp) {
+    buildStamp.textContent = typeof __APP_VERSION__ !== 'undefined' ? `build ${__APP_VERSION__}` : '';
+  }
   // 普段は見出し行だけに畳み、メイン操作の邪魔にならないようにする
   const setIntervalsOpen = (open) => {
     const box = $('#intervalsBox');
@@ -448,7 +454,8 @@ function setupIntervalsUi() {
 function intervalsRangeDates() {
   const days = Number($('#intervalsRange').value) || 30;
   const newest = new Date();
-  const oldest = new Date(newest.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
+  newest.setDate(newest.getDate() + 1); // newest当日分も含めるため翌日まで
+  const oldest = new Date(newest.getTime() - days * 24 * 60 * 60 * 1000);
   const toDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   return { oldest: toDate(oldest), newest: toDate(newest) };
 }
