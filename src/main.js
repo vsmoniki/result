@@ -394,12 +394,6 @@ function openIntervalsSettings(message = '') {
 
 function setupIntervalsUi() {
   const dialog = $('#intervalsSettingsDialog');
-  // 動いている版を確認できるよう、ビルド時刻を小さく表示する（切り分け用）
-  // APP_VERSION の const はファイル末尾にあるため、ここでは注入値を直接見る
-  const buildStamp = $('#intervalsBuild');
-  if (buildStamp) {
-    buildStamp.textContent = typeof __APP_VERSION__ !== 'undefined' ? `build ${__APP_VERSION__}` : '';
-  }
   // 普段は見出し行だけに畳み、メイン操作の邪魔にならないようにする
   const setIntervalsOpen = (open) => {
     const box = $('#intervalsBox');
