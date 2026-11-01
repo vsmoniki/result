@@ -89,11 +89,11 @@ h1 {
 .file-drop {
   position: relative;
   display: grid;
-  gap: 8px;
-  min-height: 84px;
-  padding: 16px 18px;
+  gap: 6px;
+  min-height: 68px;
+  padding: 12px 14px;
   border: 2px dashed rgba(255,255,255,.22);
-  border-radius: 20px;
+  border-radius: 16px;
   cursor: pointer;
   background: rgba(255,255,255,.05);
   touch-action: manipulation;
@@ -612,7 +612,7 @@ button:disabled {
   grid-column: 1 / -1;
   padding: 6px 10px;
   border: 1px solid rgba(255,255,255,.14);
-  border-radius: 14px;
+  border-radius: 16px;
   background: rgba(255,255,255,.05);
 }
 
@@ -648,8 +648,8 @@ button:disabled {
 .intervals-box.is-open .intervals-chevron { transform: rotate(180deg); }
 
 .intervals-head .secondary-action {
-  min-height: 32px;
-  padding: 4px 10px;
+  min-height: 36px;
+  padding: 4px 12px;
   font-size: .85rem;
 }
 
@@ -1026,7 +1026,7 @@ canvas {
     min-height: 0;
     gap: 3px;
     padding: 9px 12px;
-    border-radius: 14px;
+    border-radius: 16px;
   }
 
   .file-drop strong { font-size: .95rem; }
