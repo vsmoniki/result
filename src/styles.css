@@ -732,6 +732,7 @@ button:disabled {
 .intervals-item span {
   color: #b9c9d8;
   font-size: .82rem;
+  font-weight: 600;
 }
 
 .intervals-settings-dialog {
