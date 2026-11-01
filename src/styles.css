@@ -605,6 +605,179 @@ button:disabled {
   padding: 10px 14px;
 }
 
+/* ---- Intervals.icu 読み込み ---- */
+.intervals-box {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 20px;
+  background: rgba(255,255,255,.05);
+}
+
+.intervals-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.intervals-head strong { color: #fff; }
+
+.intervals-head .secondary-action {
+  min-height: 36px;
+  padding: 6px 12px;
+}
+
+.intervals-note {
+  margin: 0;
+  color: #b9c9d8;
+  font-size: .86rem;
+  line-height: 1.5;
+}
+
+.intervals-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+
+.intervals-controls label {
+  display: grid;
+  gap: 6px;
+  color: #b9c9d8;
+  font-size: .9rem;
+  font-weight: 900;
+}
+
+.intervals-controls select {
+  min-height: 42px;
+}
+
+.intervals-status {
+  margin: 0;
+  min-height: 1.2em;
+  color: #ffd166;
+  font-size: .9rem;
+}
+
+.intervals-status:empty { min-height: 0; }
+
+.intervals-list {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.intervals-item {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 14px;
+  color: #f8fbff;
+  background: rgba(255,255,255,.06);
+  text-align: left;
+  cursor: pointer;
+}
+
+.intervals-item strong {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intervals-item span {
+  color: #b9c9d8;
+  font-size: .82rem;
+}
+
+.intervals-settings-dialog {
+  width: min(92vw, 480px);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 18px;
+  padding: 0;
+  color: #f8fbff;
+  background: rgba(6, 19, 32, .96);
+  box-shadow: 0 24px 80px rgba(0,0,0,.45);
+}
+
+.intervals-settings-dialog::backdrop {
+  background: rgba(0,0,0,.58);
+}
+
+.intervals-settings-surface {
+  display: grid;
+  gap: 12px;
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.intervals-settings-surface h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.intervals-settings-lead {
+  margin: 0;
+  color: #b9c9d8;
+  font-size: .9rem;
+  line-height: 1.6;
+}
+
+.intervals-field {
+  display: grid;
+  gap: 6px;
+  color: #b9c9d8;
+  font-size: .9rem;
+  font-weight: 900;
+}
+
+.intervals-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #b9c9d8;
+  font-size: .9rem;
+}
+
+.intervals-check input { accent-color: #ff5b1a; }
+
+.intervals-howto {
+  color: #b9c9d8;
+  font-size: .88rem;
+  line-height: 1.6;
+}
+
+.intervals-howto summary {
+  cursor: pointer;
+  color: #f8fbff;
+  font-weight: 900;
+}
+
+.intervals-howto ol { padding-left: 1.3em; }
+
+.intervals-howto a { color: #ffd166; }
+
+.intervals-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.intervals-settings-actions button {
+  min-height: 42px;
+  padding: 10px 14px;
+}
+
 
 .support-footer {
   width: min(1480px, calc(100% - 32px));

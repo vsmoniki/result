@@ -59,6 +59,26 @@
             />
           </div>
 
+          <div class="intervals-box">
+            <div class="intervals-head">
+              <strong>Intervals.icuから読み込む</strong>
+              <button id="intervalsSettingsOpen" class="secondary-action" type="button">API設定</button>
+            </div>
+            <p class="intervals-note">FITファイルがなくても、Intervals.icuに記録されたアクティビティから画像を作れます。APIキーの利用は自己責任です。Stravaから取り込んだアクティビティはAPI経由で取得できないため使えません。</p>
+            <div class="intervals-controls">
+              <label>期間
+                <select id="intervalsRange">
+                  <option value="7">最近7日</option>
+                  <option value="30" selected>最近30日</option>
+                  <option value="90">最近90日</option>
+                </select>
+              </label>
+              <button id="intervalsLoad" type="button">アクティビティを取得</button>
+            </div>
+            <p id="intervalsStatus" class="intervals-status" aria-live="polite"></p>
+            <div id="intervalsList" class="intervals-list" hidden></div>
+          </div>
+
           <div class="mode-grid" role="tablist" aria-label="作成する画像タイプ">
             <label><input type="radio" name="mode" value="report" checked /> ライドレポート</label>
             <label><input type="radio" name="mode" value="finish" /> 完走タイム</label>
@@ -157,6 +177,34 @@
         </a>
       </footer>
     </div>
+    <dialog id="intervalsSettingsDialog" class="intervals-settings-dialog">
+      <div class="intervals-settings-surface">
+        <h2>Intervals.icu API設定</h2>
+        <p class="intervals-settings-lead">自分のIntervals.icuアカウントのAPIキーを使います。キーはこのブラウザ内にだけ保存され、Intervals.icu以外のサーバーへ送られることはありません（このサイト自体にサーバーはありません）。</p>
+        <label class="intervals-field">APIキー<input id="intervalsApiKey" type="password" autocomplete="off" placeholder="APIキー" /></label>
+        <label class="intervals-check"><input id="intervalsShowKey" type="checkbox" /> キーを表示する</label>
+        <label class="intervals-field">アスリートID（任意）<input id="intervalsAthleteId" type="text" autocomplete="off" placeholder="例: i123456（空欄ならキーの持ち主）" /></label>
+        <label class="intervals-check"><input id="intervalsRemember" type="checkbox" checked /> この端末に保存する（オフにするとタブを閉じた時点で消えます）</label>
+        <details class="intervals-howto">
+          <summary>APIキーの取得方法</summary>
+          <ol>
+            <li>Intervals.icuにログインし、<a href="https://intervals.icu/settings" target="_blank" rel="noopener noreferrer">設定ページ</a>を開く</li>
+            <li>ページの下の方にある「Developer Settings（開発者設定）」までスクロールする</li>
+            <li>そこにアスリートIDとAPIキーが並んでいる。APIキーは「(view)」で表示し、まだ無い場合は「Generate」で生成してコピーする</li>
+            <li>コピーしたAPIキーを上の欄に貼り付ける</li>
+          </ol>
+          <p>注意: APIキーの利用は自己責任です。キーはパスワードと同じなので、他人に教えたり、共有のパソコンで「この端末に保存する」をオンにしたりしないでください。キーはIntervals.icuの設定ページでいつでも再生成・削除できます（再生成すると古いキーは使えなくなります）。</p>
+          <p>また、Stravaから取り込んだアクティビティは、Stravaの規約によりIntervals.icuのAPI経由ではデータを取得できないため、この機能では使えません。Garminなどから直接Intervals.icuに取り込んだアクティビティを選んでください。</p>
+        </details>
+        <p id="intervalsSettingsStatus" class="intervals-status" aria-live="polite"></p>
+        <div class="intervals-settings-actions">
+          <button id="intervalsTest" class="secondary-action" type="button">接続テスト</button>
+          <button id="intervalsClear" class="secondary-action" type="button">キーを削除</button>
+          <button id="intervalsSettingsCancel" class="secondary-action" type="button">キャンセル</button>
+          <button id="intervalsSettingsSave" type="button">保存</button>
+        </div>
+      </div>
+    </dialog>
     <dialog id="avatarCropDialog" class="avatar-crop-dialog">
       <div class="avatar-crop-surface">
         <h2>右上のアイコン</h2>
