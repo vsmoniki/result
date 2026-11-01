@@ -492,12 +492,17 @@ function renderIntervalsList(activities) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'intervals-item';
+    // button直下に複数要素を置くとモバイルSafariで高さ計算が崩れるため、
+    // 中身はラッパー1つにまとめる
+    const inner = document.createElement('span');
+    inner.className = 'intervals-item-inner';
     const title = document.createElement('strong');
     // 名前が空で返るケースに備え、表示側でも種別＋日付の見出しに落とす
     title.textContent = activity.name || fallbackListTitle(activity);
     const meta = document.createElement('span');
     meta.textContent = formatIntervalsActivityMeta(activity);
-    button.append(title, meta);
+    inner.append(title, meta);
+    button.append(inner);
     button.addEventListener('click', () => processIntervalsActivity(activity));
     list.append(button);
   });
