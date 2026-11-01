@@ -59,24 +59,29 @@
             />
           </div>
 
-          <div class="intervals-box">
+          <div class="intervals-box" id="intervalsBox">
             <div class="intervals-head">
-              <strong>Intervals.icuから読み込む</strong>
+              <button id="intervalsToggle" class="intervals-toggle" type="button" aria-expanded="false" aria-controls="intervalsBody">
+                <span>Intervals.icuから読み込む</span>
+                <span class="intervals-chevron" aria-hidden="true">▾</span>
+              </button>
               <button id="intervalsSettingsOpen" class="secondary-action" type="button">API設定</button>
             </div>
-            <p class="intervals-note">FITファイルがなくても、Intervals.icuに記録されたアクティビティから画像を作れます。APIキーの利用は自己責任です。Stravaから取り込んだアクティビティはAPI経由で取得できないため使えません。</p>
-            <div class="intervals-controls">
-              <label>期間
-                <select id="intervalsRange">
-                  <option value="7">最近7日</option>
-                  <option value="30" selected>最近30日</option>
-                  <option value="90">最近90日</option>
-                </select>
-              </label>
-              <button id="intervalsLoad" type="button">アクティビティを取得</button>
+            <div id="intervalsBody" class="intervals-body" hidden>
+              <p class="intervals-note">FITファイルがなくても、Intervals.icuに記録されたアクティビティから画像を作れます。APIキーの利用は自己責任です。Stravaから取り込んだアクティビティはAPI経由で取得できないため使えません。</p>
+              <div class="intervals-controls">
+                <label>期間
+                  <select id="intervalsRange">
+                    <option value="7">最近7日</option>
+                    <option value="30" selected>最近30日</option>
+                    <option value="90">最近90日</option>
+                  </select>
+                </label>
+                <button id="intervalsLoad" type="button">アクティビティを取得</button>
+              </div>
+              <p id="intervalsStatus" class="intervals-status" aria-live="polite"></p>
+              <div id="intervalsList" class="intervals-list" hidden></div>
             </div>
-            <p id="intervalsStatus" class="intervals-status" aria-live="polite"></p>
-            <div id="intervalsList" class="intervals-list" hidden></div>
           </div>
 
           <div class="mode-grid" role="tablist" aria-label="作成する画像タイプ">

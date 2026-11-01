@@ -394,6 +394,19 @@ function openIntervalsSettings(message = '') {
 
 function setupIntervalsUi() {
   const dialog = $('#intervalsSettingsDialog');
+  // 普段は見出し行だけに畳み、メイン操作の邪魔にならないようにする
+  const setIntervalsOpen = (open) => {
+    const box = $('#intervalsBox');
+    const body = $('#intervalsBody');
+    const toggle = $('#intervalsToggle');
+    if (!box || !body || !toggle) return;
+    body.hidden = !open;
+    box.classList.toggle('is-open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+  };
+  $('#intervalsToggle').addEventListener('click', () => {
+    setIntervalsOpen($('#intervalsBody').hidden);
+  });
   $('#intervalsSettingsOpen').addEventListener('click', () => openIntervalsSettings());
   $('#intervalsSettingsCancel').addEventListener('click', () => dialog.close());
   $('#intervalsShowKey').addEventListener('change', (event) => {
@@ -407,6 +420,7 @@ function setupIntervalsUi() {
     }
     saveIntervalsSettings(settings);
     dialog.close();
+    setIntervalsOpen(true);
     setIntervalsStatus('API設定を保存しました。「アクティビティを取得」を押してください。');
   });
   $('#intervalsClear').addEventListener('click', () => {
