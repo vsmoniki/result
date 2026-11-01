@@ -35,12 +35,21 @@ test('athlete id defaults to 0 (key owner) when blank', () => {
   assert.equal(normalizeAthleteId(' i123456 '), 'i123456');
 });
 
-test('activities url carries range and field selection', () => {
+test('activities url carries the range without field filtering', () => {
   const url = buildActivitiesUrl({ athleteId: '', oldest: '2026-10-01', newest: '2026-10-31' });
   assert.match(url, /\/athlete\/0\/activities\?/);
   assert.match(url, /oldest=2026-10-01/);
   assert.match(url, /newest=2026-10-31/);
-  assert.match(url, /fields=/);
+  assert.doesNotMatch(url, /fields=/);
+});
+
+test('summarizeActivity falls back when the name is empty', () => {
+  const fromTitle = summarizeActivity({ id: 'i2', title: 'Evening Ride', type: 'Ride', start_date_local: '2026-10-30T18:00:00' });
+  assert.equal(fromTitle.name, 'Evening Ride');
+  const fromType = summarizeActivity({ id: 'i3', name: '  ', type: 'VirtualRide', start_date_local: '2026-10-30T06:00:00' });
+  assert.equal(fromType.name, 'VirtualRide（10/30）');
+  const bare = summarizeActivity({ id: 'i4' });
+  assert.equal(bare.name, 'アクティビティ');
 });
 
 test('streams url requests the series the graph uses', () => {

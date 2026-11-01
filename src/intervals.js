@@ -40,21 +40,9 @@ export function normalizeAthleteId(value) {
 }
 
 export function buildActivitiesUrl({ athleteId, oldest, newest }) {
-  const params = new URLSearchParams({
-    oldest,
-    newest,
-    fields: [
-      'id',
-      'name',
-      'type',
-      'start_date_local',
-      'moving_time',
-      'elapsed_time',
-      'distance',
-      'total_elevation_gain',
-      'calories',
-    ].join(','),
-  });
+  // fields で絞ると取得元によって name 等が欠けるケースがあったため、
+  // 絞らずに全項目を取得して表示側で整形する。
+  const params = new URLSearchParams({ oldest, newest });
   return `${INTERVALS_API_BASE}/athlete/${encodeURIComponent(normalizeAthleteId(athleteId))}/activities?${params}`;
 }
 
@@ -69,15 +57,28 @@ export function buildAthleteUrl(athleteId) {
 
 // 一覧表示用にアクティビティ概要を整える。距離は API のメートル表記を
 // このアプリの表示単位 km に直す。
+function fallbackActivityName(type, startDateLocal) {
+  const label = type || 'アクティビティ';
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(startDateLocal || '');
+  if (!match) return label;
+  return `${label}（${Number(match[2])}/${Number(match[3])}）`;
+}
+
 export function summarizeActivity(raw) {
   if (!raw || raw.id == null) return null;
   const distanceM = Number(raw.distance);
   const elevationM = Number(raw.total_elevation_gain);
+  const type = String(raw.type ?? '');
+  const startDateLocal = String(raw.start_date_local ?? '');
+  // 取得元によっては name が空で返ることがあるため、代替の見出しを用意する
+  const name = String(raw.name ?? '').trim()
+    || String(raw.title ?? '').trim()
+    || fallbackActivityName(type, startDateLocal);
   return {
     id: String(raw.id),
-    name: String(raw.name ?? '').trim() || '(無題)',
-    type: String(raw.type ?? ''),
-    startDateLocal: String(raw.start_date_local ?? ''),
+    name,
+    type,
+    startDateLocal,
     movingTimeSec: Number.isFinite(Number(raw.moving_time)) ? Number(raw.moving_time) : null,
     elapsedTimeSec: Number.isFinite(Number(raw.elapsed_time)) ? Number(raw.elapsed_time) : null,
     distanceKm: Number.isFinite(distanceM) ? distanceM / 1000 : null,
