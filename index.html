@@ -127,7 +127,16 @@
         <section class="panel preview-panel">
           <div class="preview-toolbar">
             <h2>プレビュー</h2>
-            <a id="download" class="download disabled" download="zwift-result.png">画像を保存</a>
+            <div class="preview-actions">
+              <label class="share-scope-label">共有
+                <select id="shareScope" class="share-scope" disabled>
+                  <option value="single">表示中の画像のみ</option>
+                  <option value="both">両方（レポート＋完走タイム）</option>
+                </select>
+              </label>
+              <button id="shareButton" class="share-button" type="button" disabled>SNSで共有</button>
+              <a id="download" class="download disabled" download="zwift-result.png">画像を保存</a>
+            </div>
           </div>
           <canvas id="canvas" width="1920" height="1080" aria-label="生成画像プレビュー"></canvas>
           <details class="preview-options">
