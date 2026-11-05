@@ -166,6 +166,7 @@ $('#generate').addEventListener('click', async () => {
   }
 });
 $('#download').addEventListener('click', savePng);
+$('#shareButton').addEventListener('click', shareImages);
 canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 $('#rideTitle').addEventListener('input', handleRideTitleInput);
 $('#avatarMessage').addEventListener('input', handleAvatarMessageInput);
@@ -1093,6 +1094,8 @@ function clearGeneratedDownload() {
   }
   state.downloadUrl = null;
   state.downloadBlob = null;
+  $('#shareButton').disabled = true;
+  $('#shareScope').disabled = true;
 }
 
 function buildDownloadFileName(mode) {
@@ -1221,25 +1224,8 @@ async function generateImage() {
     handlePendingFileSelection();
     setStatus('先にFITファイルを選択してください。', true);
     return;
-  } else if (mode === 'finish') {
-    const weight = Number($('#weight').value);
-    if (!isValidPositiveNumber(weight)) return setStatus('体重を入力してください。', true);
-    drawFinishResult(state.metrics, weight);
-  } else {
-    const title = $('#rideTitle').value.trim();
-    const ftp = Number($('#ftp').value);
-    const level = Number($('#level').value);
-    const maxHrSetting = Number($('#maxHrSetting').value);
-    if (!title || !isValidPositiveNumber(ftp) || !isValidLevel(level) || !isValidPositiveNumber(maxHrSetting)) return setStatus('タイトル、FTP、レベル、最大心拍数を入力してください。', true);
-    const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
-    const avatarMessage = getAvatarMessage();
-    const avatarBubbleColor = getColorInputValue('#avatarBubbleColor', DEFAULT_AVATAR_BUBBLE_COLOR);
-    const avatarTextColor = getColorInputValue('#avatarTextColor', DEFAULT_AVATAR_TEXT_COLOR);
-    const graphSmoothness = getSelectedGraphSmoothness();
-    const powerGraphHeight = getSelectedPowerGraphHeight();
-    const graphLineWidth = getSelectedGraphLineWidth();
-    drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, avatarMessage, avatarBubbleColor, avatarTextColor, graphSmoothness, powerGraphHeight, graphLineWidth });
   }
+  if (!drawForMode(mode)) return;
   canvas.toBlob((blob) => {
     if (!blob) return;
     if (state.downloadUrl) URL.revokeObjectURL(state.downloadUrl);
@@ -1250,12 +1236,130 @@ async function generateImage() {
     download.href = state.downloadUrl;
     download.download = state.downloadFileName;
     download.classList.remove('disabled');
+    $('#shareButton').disabled = false;
+    $('#shareScope').disabled = false;
   }, 'image/png');
   const saveMessage = isSmartphoneDevice()
     ? '画像を作成しました。「画像を保存」から端末に保存できます。'
     : '画像を作成しました。画像を保存できます。';
   setStatus(saveMessage);
   maybeScrollToPreview();
+}
+
+// Draw one mode's image onto the shared canvas. Returns false (with the
+// reason already shown in the status line) when its inputs are incomplete.
+// Used by generateImage for the preview and by shareImages to build the
+// other mode's image without switching modes.
+function drawForMode(mode) {
+  if (mode === 'finish') {
+    const weight = Number($('#weight').value);
+    if (!isValidPositiveNumber(weight)) {
+      setStatus('体重を入力してください。', true);
+      return false;
+    }
+    drawFinishResult(state.metrics, weight);
+    return true;
+  }
+  const title = $('#rideTitle').value.trim();
+  const ftp = Number($('#ftp').value);
+  const level = Number($('#level').value);
+  const maxHrSetting = Number($('#maxHrSetting').value);
+  if (!title || !isValidPositiveNumber(ftp) || !isValidLevel(level) || !isValidPositiveNumber(maxHrSetting)) {
+    setStatus('タイトル、FTP、レベル、最大心拍数を入力してください。', true);
+    return false;
+  }
+  const sp = Math.max(0, Math.round(Number($('#spInput').value) || 0));
+  const avatarMessage = getAvatarMessage();
+  const avatarBubbleColor = getColorInputValue('#avatarBubbleColor', DEFAULT_AVATAR_BUBBLE_COLOR);
+  const avatarTextColor = getColorInputValue('#avatarTextColor', DEFAULT_AVATAR_TEXT_COLOR);
+  const graphSmoothness = getSelectedGraphSmoothness();
+  const powerGraphHeight = getSelectedPowerGraphHeight();
+  const graphLineWidth = getSelectedGraphLineWidth();
+  drawRideReport(state.metrics, { title, ftp, level: Math.round(level), maxHrSetting, sp, avatarMessage, avatarBubbleColor, avatarTextColor, graphSmoothness, powerGraphHeight, graphLineWidth });
+  return true;
+}
+
+function reportInputsValid() {
+  return Boolean(
+    $('#rideTitle').value.trim()
+    && isValidPositiveNumber(Number($('#ftp').value))
+    && isValidLevel(Number($('#level').value))
+    && isValidPositiveNumber(Number($('#maxHrSetting').value)),
+  );
+}
+
+function finishInputsValid() {
+  return isValidPositiveNumber(Number($('#weight').value));
+}
+
+function canvasToBlobPromise() {
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}
+
+// Share the generated image(s) through the OS share sheet (Web Share API),
+// which hands the PNG(s) to SNS apps such as X, Instagram, Threads or LINE.
+// Scope comes from the select next to the button: the currently shown image
+// only, or both images (ride report + finish time) generated on the spot.
+// Browsers without file sharing fall back to downloading the PNG(s).
+async function shareImages() {
+  if (!state.metrics || !state.downloadBlob) {
+    setStatus('先に画像を作成してください。', true);
+    return;
+  }
+  const scope = $('#shareScope').value;
+  const currentMode = getMode();
+  let files;
+  if (scope === 'both') {
+    if (!reportInputsValid()) {
+      setStatus('両方を共有するには、ライドレポートの項目（タイトル、FTP、レベル、最大心拍数）も入力してください。', true);
+      return;
+    }
+    if (!finishInputsValid()) {
+      setStatus('両方を共有するには、完走タイム用の体重も入力してください。', true);
+      return;
+    }
+    await ensureDrawingFonts($('#rideTitle')?.value?.trim() || '');
+    files = [];
+    for (const mode of ['report', 'finish']) {
+      if (!drawForMode(mode)) return;
+      const blob = await canvasToBlobPromise();
+      if (!blob) {
+        setStatus('画像の作成に失敗しました。', true);
+        return;
+      }
+      files.push(new File([blob], buildDownloadFileName(mode), { type: 'image/png' }));
+    }
+    // Restore the preview (and the stored download blob) to the current mode.
+    await generateImage();
+  } else {
+    files = [new File([state.downloadBlob], state.downloadFileName, { type: 'image/png' })];
+  }
+
+  if (navigator.share && navigator.canShare?.({ files })) {
+    try {
+      await navigator.share({ files, title: 'Zwiftリザルト画像' });
+      setStatus(files.length > 1 ? '共有メニューを開きました。2枚の画像をSNSなどへ送れます。' : '共有メニューを開きました。SNSなどへそのまま送れます。');
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        setStatus('共有をキャンセルしました。');
+        return;
+      }
+      setStatus(`共有を開始できませんでした: ${formatError(error)}`, true);
+    }
+    return;
+  }
+
+  // No Web Share support: save the PNG(s) instead so the user can still
+  // attach them from the SNS app.
+  files.forEach((file) => {
+    const url = URL.createObjectURL(file);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = file.name;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  });
+  setStatus('このブラウザは共有に対応していないため、画像を保存しました。SNSアプリから添付して投稿してください。');
 }
 
 // After a fresh generation (new file loaded or the generate button was
@@ -1300,13 +1404,8 @@ async function savePng(event) {
 
 function canGenerateImage() {
   if (!state.metrics || state.isLoadingFile) return false;
-  if (getMode() === 'finish') return isValidPositiveNumber(Number($('#weight').value));
-  return Boolean(
-    $('#rideTitle').value.trim()
-      && isValidPositiveNumber(Number($('#ftp').value))
-      && isValidLevel(Number($('#level').value))
-      && isValidPositiveNumber(Number($('#maxHrSetting').value)),
-  );
+  if (getMode() === 'finish') return finishInputsValid();
+  return reportInputsValid();
 }
 
 function isValidPositiveNumber(value) {

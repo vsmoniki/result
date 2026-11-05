@@ -437,6 +437,53 @@ button,
   box-shadow: none;
 }
 
+.preview-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.share-scope-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  font-size: .88rem;
+}
+
+.share-scope {
+  max-width: 225px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.25);
+  background: rgba(255,255,255,.08);
+  color: inherit;
+  font-weight: 700;
+  font-size: .85rem;
+}
+
+.share-scope:disabled {
+  opacity: .42;
+}
+
+.share-button {
+  background: #24242a;
+  box-shadow: none;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: .9rem;
+  white-space: nowrap;
+}
+
+/* ツールバー内では保存ボタンも共有ボタンと高さをそろえて細くする */
+.preview-toolbar .download {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: .9rem;
+}
+
 .download.disabled,
 button:disabled {
   pointer-events: none;
@@ -1129,12 +1176,29 @@ canvas {
   }
 
   .preview-toolbar h2 {
-    grid-column: span 2;
+    grid-column: 1 / -1;
   }
 
+  .preview-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .share-scope-label {
+    grid-column: 1 / -1;
+  }
+
+  .share-scope {
+    flex: 1;
+    max-width: none;
+  }
+
+  .share-button,
   .preview-toolbar .download {
     width: 100%;
-    grid-column: span 2;
+    white-space: nowrap;
   }
 
   .preview-options {
