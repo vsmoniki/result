@@ -1337,7 +1337,7 @@ async function shareImages() {
 
   if (navigator.share && navigator.canShare?.({ files })) {
     try {
-      await navigator.share({ files, title: 'Zwiftリザルト画像' });
+      await navigator.share({ files });
       setStatus(files.length > 1 ? '共有メニューを開きました。2枚の画像をSNSなどへ送れます。' : '共有メニューを開きました。SNSなどへそのまま送れます。');
     } catch (error) {
       if (error?.name === 'AbortError') {
@@ -1391,7 +1391,7 @@ async function savePng(event) {
 
   event.preventDefault();
   try {
-    await navigator.share({ files: [file], title: 'Zwiftリザルト画像' });
+    await navigator.share({ files: [file] });
     setStatus('共有メニューから端末にPNGを保存できます。');
   } catch (error) {
     if (error?.name === 'AbortError') {
