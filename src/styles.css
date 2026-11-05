@@ -86,6 +86,13 @@ h1 {
   margin-bottom: 22px;
 }
 
+/* 入力欄は2列分を使って確保し、作成ボタンは auto 列（内容幅）に収める。
+   1列に押し込むと入力欄がはみ出してボタンと重なるため。 */
+.controls #reportInputs,
+.controls #finishInputs {
+  grid-column: span 2;
+}
+
 .file-drop {
   position: relative;
   display: grid;
@@ -995,6 +1002,12 @@ canvas {
   .controls,
   .form-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 1列レイアウトでは span 2 が暗黙の列を作らないよう戻す */
+  .controls #reportInputs,
+  .controls #finishInputs {
+    grid-column: auto;
   }
 
   .report-details-grid {
